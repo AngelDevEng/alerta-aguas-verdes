@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: alerta-aguas-verdes-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: evidencias
+      - key: CORS_ORIGIN
+        value: "*"

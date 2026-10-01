@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
+
+# Capturas de evidencia: material sensible, no debe versionarse
+b7363468-d479-422f-bbee-2fe68760917e.jpg

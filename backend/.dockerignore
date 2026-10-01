@@ -1,0 +1,9 @@
+# Nunca enviar .env ni secretos al contexto de build
+.env
+.env.*
+!.env.example
+
+node_modules
+dist
+*.log
+.DS_Store
