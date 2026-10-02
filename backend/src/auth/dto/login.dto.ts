@@ -6,7 +6,7 @@ export class LoginDto {
   @IsString() @Matches(/^[0-9]{8}$/, { message: 'El dni debe tener 8 digitos numericos' })
   dni: string;
 
-  @ApiProperty({ example: 'CambiarEsto.2026' })
+  @ApiProperty({ example: 'mi-contrasena-segura', writeOnly: true })
   @IsString() @IsNotEmpty() @MaxLength(72)
   password: string;
 }

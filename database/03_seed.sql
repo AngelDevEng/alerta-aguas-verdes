@@ -1,12 +1,18 @@
 -- Datos iniciales (catalogos y datos de prueba en Aguas Verdes: lat -3.4825, lon -80.2450)
 --
 --  !! SEGURIDAD !!
---  Los usuarios de abajo usan la MISMA contrasena de prueba: CambiarEsto.2026
---  Este archivo es versionado, asi que esa contrasena queda conocida por cualquiera
---  con acceso al repositorio. Antes de exponer el servicio hay que:
---    1. ejecutar UPDATE usuarios SET password_hash = <hash propio> ...
---    2. o desactivar las cuentas: UPDATE usuarios SET activo = FALSE
---  Generar un hash propio:  node -e "console.log(require('bcryptjs').hashSync('TU_CONTRASENA',10))"
+--  Este archivo esta versionado: NO puede contener una contrasena que sirva.
+--  Los tres usuarios se insertan con un hash invalido por diseño, asi que
+--  arrancar con ellos es imposible hasta que asignes una contrasena real.
+--
+--  Pasos para habilitar cada cuenta (desde el backend, donde esta bcryptjs):
+--    1. generar hash:  node -e "console.log(require('bcryptjs').hashSync(process.argv[1],12))" 'MI_CONTRASENA'
+--    2. asignarlo:      UPDATE usuarios SET password_hash = '<hash>' WHERE dni = '00000001'
+--
+--  Para pruebas locales efimeras se puede desactivar el acceso en vez de eso:
+--    UPDATE usuarios SET activo = FALSE
+--
+--  Rotacion masiva: backend/scripts/rotar-credenciales.mjs
 -- =====================================================================
 
 INSERT INTO roles(nombre) VALUES ('ADMIN'),('OPERADOR'),('SERENO'),('DIRECTIVO'),('CIUDADANO')
@@ -19,16 +25,18 @@ INSERT INTO tipos_incidencia(codigo,nombre,prioridad) VALUES
   ('EMER','Emergencia médica','CRITICA')
   ON CONFLICT (codigo) DO NOTHING;
 
--- bcrypt("CambiarEsto.2026", 10). CAMBIAR antes de produccion.
+-- Hash inservible: bcrypt de una cadena aleatoria de 48 bytes descartada.
+-- Nadie puede autenticarse con estas cuentas hasta asignar un hash propio
+-- (ver instrucciones de seguridad al inicio del archivo).
 INSERT INTO usuarios(dni,nombres,apellidos,email,password_hash,rol_id) VALUES
   ('00000001','Operador','Demo','operador@muniaguasverdes.gob.pe',
-   '$2a$10$ly5HnOSQURwAhzhohgAeoOOo/F//ApzJFWX71YG5RsQS9.uBiP3LO',
+   '$2a$12$EHidfmMr68yo/wRkc9HQfezu8Or5OvFzdPEuCK8kk9BpmJSF99ry2',
    (SELECT id FROM roles WHERE nombre='OPERADOR')),
   ('00000002','Admin','Municipal','admin@muniaguasverdes.gob.pe',
-   '$2a$10$ly5HnOSQURwAhzhohgAeoOOo/F//ApzJFWX71YG5RsQS9.uBiP3LO',
+   '$2a$12$EHidfmMr68yo/wRkc9HQfezu8Or5OvFzdPEuCK8kk9BpmJSF99ry2',
    (SELECT id FROM roles WHERE nombre='ADMIN')),
   ('00000003','Sereno','Demo','sereno@muniaguasverdes.gob.pe',
-   '$2a$10$ly5HnOSQURwAhzhohgAeoOOo/F//ApzJFWX71YG5RsQS9.uBiP3LO',
+   '$2a$12$EHidfmMr68yo/wRkc9HQfezu8Or5OvFzdPEuCK8kk9BpmJSF99ry2',
    (SELECT id FROM roles WHERE nombre='SERENO'))
   ON CONFLICT (dni) DO NOTHING;
 

@@ -24,8 +24,14 @@ y `POST /api/v1/alertas` (el ciudadano que pulsa SOS no tiene cuenta).
 ```
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"dni":"00000001","password":"CambiarEsto.2026"}'
+  -d '{"dni":"<TU_DNI>","password":"<TU_CONTRASENA>"}'
 ```
+
+Las cuentas del seed (DNI `00000001` a `00000003`) se crean con un hash
+inservible a proposito, porque este archivo esta versionado. Para habilitarlas
+mira `database/03_seed.sql`, y para rotarlas en bloque ejecuta
+`node backend/scripts/rotar-credenciales.mjs` desde `backend/`, que genera
+contrasenas aleatorias, actualiza la base y revoca las sesiones abiertas.
 
 El access token dura 15 min (`JWT_EXPIRES_IN`). El refresh token dura 30 dias,
 se rota en cada uso y se guarda solo su SHA-256.
