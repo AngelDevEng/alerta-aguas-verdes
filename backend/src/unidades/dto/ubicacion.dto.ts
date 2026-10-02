@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsLatitude, IsLongitude, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsLatitude, IsLongitude, IsNumber, IsOptional, Max, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ESTADOS_UNIDAD } from '../../common/enums';
 
@@ -17,4 +17,9 @@ export class CercanasQueryDto {
   @ApiProperty() @Type(() => Number) @IsNumber() @IsLatitude() lat: number;
   @ApiProperty() @Type(() => Number) @IsNumber() @IsLongitude() lon: number;
   @ApiPropertyOptional({ default: 2000 }) @IsOptional() @Type(() => Number) @IsNumber() @Min(1) radio = 2000;
+}
+
+export class RastroQueryDto {
+  @ApiPropertyOptional({ default: 200, maximum: 2000 })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(2000) limite = 200;
 }

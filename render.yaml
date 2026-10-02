@@ -8,6 +8,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
@@ -15,4 +19,6 @@ services:
       - key: SUPABASE_BUCKET
         value: evidencias
       - key: CORS_ORIGIN
-        value: "*"
+        sync: false
+      - key: NODE_ENV
+        value: production

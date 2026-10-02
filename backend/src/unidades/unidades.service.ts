@@ -1,10 +1,11 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateUnidadDto } from './dto/create-unidad.dto';
 import { UbicacionDto } from './dto/ubicacion.dto';
+import { UsuarioAutenticado } from '../common/types';
 
 const SELECT_BASE = `
-  SELECT id, codigo, tipo, placa, estado,
+  SELECT id, codigo, tipo, placa, estado, responsable_id AS "responsableId",
          ST_Y(ultima_ubicacion::geometry) AS latitud, ST_X(ultima_ubicacion::geometry) AS longitud,
          ultima_actualizacion AS "ultimaActualizacion"
     FROM unidades_serenazgo`;
@@ -39,12 +40,38 @@ export class UnidadesService {
       [lon, lat, Math.round(radio)]);
   }
 
-  async registrarUbicacion(id: string, dto: UbicacionDto) {
-    await this.findOne(id);
+  /**
+   * Un SERENO solo puede reportar la posicion de la unidad que tiene asignada
+   * (unidades_serenazgo.responsable_id). OPERADOR y ADMIN pueden reportar cualquiera.
+   */
+  async registrarUbicacion(id: string, dto: UbicacionDto, u: UsuarioAutenticado) {
+    const unidad = await this.findOne(id);
+    if (u.rol === 'SERENO' && unidad.responsableId !== u.id) {
+      throw new ForbiddenException('No tienes asignada esta unidad');
+    }
     await this.ds.query(
       `INSERT INTO ubicaciones_unidad (unidad_id, ubicacion, velocidad_kmh)
        VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4)`,
       [id, dto.longitud, dto.latitud, dto.velocidadKmh ?? null]);
+    return this.findOne(id);
+  }
+
+  /** Recorrido GPS reciente. Antes los puntos se escribian pero nunca se leian. */
+  async rastro(id: string, limite = 200) {
+    await this.findOne(id);
+    return this.ds.query(
+      `SELECT id, ST_Y(ubicacion::geometry) AS latitud, ST_X(ubicacion::geometry) AS longitud,
+              velocidad_kmh AS "velocidadKmh", registrado_en AS "registradoEn"
+         FROM ubicaciones_unidad
+        WHERE unidad_id = $1
+        ORDER BY registrado_en DESC
+        LIMIT $2`,
+      [id, limite]);
+  }
+
+  async asignarResponsable(id: string, usuarioId: string | null) {
+    await this.findOne(id);
+    await this.ds.query(`UPDATE unidades_serenazgo SET responsable_id = $2 WHERE id = $1`, [id, usuarioId]);
     return this.findOne(id);
   }
 

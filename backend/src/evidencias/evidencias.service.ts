@@ -18,7 +18,7 @@ export class EvidenciasService {
     this.bucket = cfg.get('SUPABASE_BUCKET') ?? 'evidencias';
   }
 
-  async subir(incidenciaId: string, file: Express.Multer.File, lat?: number, lon?: number) {
+  async subir(incidenciaId: string, file: Express.Multer.File, lat?: number, lon?: number, subidoPor?: string) {
     if (!file) throw new BadRequestException('Falta el archivo (campo "archivo")');
     const tipo = MIME_PERMITIDOS[file.mimetype];
     if (!tipo) throw new BadRequestException(`Tipo de archivo no permitido: ${file.mimetype}`);
@@ -38,11 +38,11 @@ export class EvidenciasService {
       const hasGeo = Number.isFinite(lat) && Number.isFinite(lon);
       const [row] = await this.ds.query(
         `INSERT INTO evidencias_multimedia
-           (incidencia_id, tipo, storage_path, url_publica, mime_type, tamano_bytes, hash_sha256, ubicacion)
+           (incidencia_id, tipo, storage_path, url_publica, mime_type, tamano_bytes, hash_sha256, ubicacion, subido_por)
          VALUES ($1, $2::tipo_evidencia, $3, $4, $5, $6, $7,
-                 CASE WHEN $8::boolean THEN ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography END)
+                 CASE WHEN $8::boolean THEN ST_SetSRID(ST_MakePoint($9, $10), 4326)::geography END, $11)
          RETURNING id, tipo, url_publica AS url, hash_sha256 AS hash, capturado_en AS "capturadoEn"`,
-        [incidenciaId, tipo, path, url, file.mimetype, file.size, hash, hasGeo, lon ?? 0, lat ?? 0]);
+        [incidenciaId, tipo, path, url, file.mimetype, file.size, hash, hasGeo, lon ?? 0, lat ?? 0, subidoPor ?? null]);
       return row;
     } catch (e: any) {
       await this.supabase.storage.from(this.bucket).remove([path]); // evita archivos huérfanos
