@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UnidadesService } from './unidades.service';
 import { CreateUnidadDto } from './dto/create-unidad.dto';
 import { CercanasQueryDto, EstadoUnidadDto, RastroQueryDto, UbicacionDto } from './dto/ubicacion.dto';
 import { AsignarResponsableDto } from './dto/asignar-responsable.dto';
+import { UpdateUnidadDto } from './dto/update-unidad.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuarioAutenticado } from '../common/types';
@@ -23,8 +24,10 @@ export class UnidadesController {
   @Roles('ADMIN')
   @Post() create(@Body() dto: CreateUnidadDto) { return this.svc.create(dto); }
 
-  @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
-  @Get() findAll() { return this.svc.findAll(); }
+  // El listado operativo solo expone campos minimos, sin DNI (ver service).
+  // DIRECTIVO no los necesita: el seguimiento de flota es operativo.
+  @Roles('SERENO', 'OPERADOR', 'ADMIN')
+  @Get() findAll(@Query('placa') placa?: string) { return this.svc.findAll(placa); }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get('cercanas') cercanas(@Query() q: CercanasQueryDto) { return this.svc.cercanas(q.lon, q.lat, q.radio); }
@@ -42,6 +45,16 @@ export class UnidadesController {
   @Roles('ADMIN', 'OPERADOR')
   @Patch(':id/estado')
   estado(@Param('id', ParseUUIDPipe) id: string, @Body() dto: EstadoUnidadDto) { return this.svc.cambiarEstado(id, dto.estado); }
+
+  @Roles('ADMIN', 'OPERADOR')
+  @Patch(':id') actualizar(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUnidadDto) {
+    return this.svc.actualizar(id, dto);
+  }
+
+  // Baja logica: se conserva la unidad con eliminado_en marcado, fuera de los
+  // listados. Solo ADMIN: borrar unidad es una decision administrativa.
+  @Roles('ADMIN')
+  @Delete(':id') eliminar(@Param('id', ParseUUIDPipe) id: string) { return this.svc.eliminar(id); }
 
   @Roles('ADMIN', 'OPERADOR', 'DIRECTIVO')
   @Get(':id/rastro')

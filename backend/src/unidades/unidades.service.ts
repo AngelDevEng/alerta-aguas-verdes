@@ -1,6 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { CreateUnidadDto } from './dto/create-unidad.dto';
+import { UpdateUnidadDto } from './dto/update-unidad.dto';
 import { UbicacionDto } from './dto/ubicacion.dto';
 import { UsuarioAutenticado } from '../common/types';
 
@@ -26,17 +27,34 @@ export class UnidadesService {
     }
   }
 
-  findAll() { return this.ds.query(`${SELECT_BASE} ORDER BY codigo`); }
+  /**
+   * Lista de unidades activas, con filtro opcional por placa.
+   *
+   * Devuelve solo campos minimos, nunca el DNI del responsable: la ley de
+   * datos personales exige que el listado operativo no arrastre la identidad
+   * completa del sereno cuando basta saber a que unidad pertenece.
+   */
+  findAll(placa?: string) {
+    const where: string[] = ['eliminado_en IS NULL'];
+    const params: any[] = [];
+    if (placa) {
+      params.push(placa.trim().toUpperCase().replace(/\s+/g, ''));
+      where.push(`placa = $${params.length}`);
+    }
+    return this.ds.query(`${SELECT_BASE} WHERE ${where.join(' AND ')} ORDER BY codigo`, params);
+  }
 
   async findOne(id: string) {
-    const [u] = await this.ds.query(`${SELECT_BASE} WHERE id = $1`, [id]);
+    const [u] = await this.ds.query(`${SELECT_BASE} WHERE id = $1 AND eliminado_en IS NULL`, [id]);
     if (!u) throw new NotFoundException('Unidad no encontrada');
     return u;
   }
 
   cercanas(lon: number, lat: number, radio: number) {
     return this.ds.query(
-      `SELECT id, codigo, tipo, round(distancia_m::numeric, 1)::float AS "distanciaM" FROM fn_unidades_cercanas($1, $2, $3)`,
+      `SELECT id, codigo, tipo, round(distancia_m::numeric, 1)::float AS "distanciaM"
+         FROM fn_unidades_cercanas($1, $2, $3)
+        WHERE id IN (SELECT id FROM unidades_serenazgo WHERE eliminado_en IS NULL)`,
       [lon, lat, Math.round(radio)]);
   }
 
@@ -79,5 +97,37 @@ export class UnidadesService {
     await this.findOne(id);
     await this.ds.query(`UPDATE unidades_serenazgo SET estado = $2::estado_unidad WHERE id = $1`, [id, estado]);
     return this.findOne(id);
+  }
+
+  /**
+   * Actualiza campos de la unidad. Solo los informados.
+   */
+  async actualizar(id: string, dto: UpdateUnidadDto) {
+    await this.findOne(id);
+    const sets: string[] = [];
+    const params: any[] = [id];
+    if (dto.codigo !== undefined) { params.push(dto.codigo); sets.push(`codigo = $${params.length}`); }
+    if (dto.tipo !== undefined) { params.push(dto.tipo); sets.push(`tipo = $${params.length}::tipo_unidad`); }
+    if (dto.placa !== undefined) { params.push(dto.placa); sets.push(`placa = $${params.length}`); }
+    if (sets.length) {
+      try {
+        await this.ds.query(`UPDATE unidades_serenazgo SET ${sets.join(', ')} WHERE id = $1`, params);
+      } catch (e: any) {
+        if (e.code === '23505') throw new ConflictException('Código o placa ya registrados');
+        throw e;
+      }
+    }
+    return this.findOne(id);
+  }
+
+  /**
+   * Baja logica: la unidad queda marcada y fuera de los listados, sin borrar
+   * sus ubicaciones ni historial de incidencias. No puede haber un segundo
+   * "baja" porque findOne ya no la ve.
+   */
+  async eliminar(id: string) {
+    await this.findOne(id);
+    await this.ds.query(`UPDATE unidades_serenazgo SET eliminado_en = now(), estado = 'FUERA_SERVICIO' WHERE id = $1`, [id]);
+    return { ok: true };
   }
 }
