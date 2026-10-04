@@ -28,4 +28,11 @@ export class CatalogosService {
         ORDER BY orden, id`,
     );
   }
+
+  /** Catalogo de tipos de incidencia, para el desplegable del reporte. */
+  tiposIncidencia() {
+    return this.ds.query(
+      `SELECT id, codigo, nombre, prioridad FROM tipos_incidencia ORDER BY id`,
+    );
+  }
 }

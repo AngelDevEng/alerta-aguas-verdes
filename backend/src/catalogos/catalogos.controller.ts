@@ -27,4 +27,12 @@ export class CatalogosController {
   whatsapp() {
     return this.svc.whatsapp();
   }
+
+  // Cualquier usuario autenticado: el ciudadano que reporta lo necesita para
+  // armar el formulario.
+  @ApiBearerAuth()
+  @Get('tipos-incidencia')
+  tiposIncidencia() {
+    return this.svc.tiposIncidencia();
+  }
 }
