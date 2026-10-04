@@ -25,6 +25,7 @@ class CatalogoRemoteDataSourceImpl implements CatalogoRemoteDataSource {
   Future<Result<List<ContactoEmergencia>>> emergencias() =>
       _api.get<List<ContactoEmergencia>>(
         '/catalogos/emergencias',
+        publico: true,
         parse: (data) => _lista(data)
             .map(ContactoEmergenciaDto.fromJson)
             .map((d) => d.toEntity())
@@ -35,6 +36,7 @@ class CatalogoRemoteDataSourceImpl implements CatalogoRemoteDataSource {
   Future<Result<List<ContactoEmergencia>>> emergenciasWhatsapp() =>
       _api.get<List<ContactoEmergencia>>(
         '/catalogos/emergencias/whatsapp',
+        publico: true,
         parse: (data) => _lista(data)
             .map(ContactoEmergenciaDto.fromJson)
             .map((d) => d.toEntity())

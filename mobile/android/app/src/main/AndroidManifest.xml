@@ -6,8 +6,12 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
 
-    <!-- Evidencias fotograficas. -->
-    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Evidencias fotograficas: NO se declara CAMERA a proposito.
+         image_picker delega la captura en ACTION_IMAGE_CAPTURE, que no exige
+         ese permiso. Declararlo sin solicitarlo en runtime hace que la app de
+         camara rechace la captura y devuelva un resultado vacio. Si alguna vez
+         se pasa a la API CameraX/Camera2, hay que declararlo Y pedirlo con
+         Geolocator/permission_handler antes de abrir la camara. -->
 
     <application
         android:label="Alerta Aguas Verdes"

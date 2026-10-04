@@ -1,12 +1,26 @@
-node_modules
-dist
-.env
-*.log
+# ---- Dependencias y build ----
+node_modules/
+dist/
+build/
+.dart_tool/
+
+# ---- Entorno y secretos (regla: cero secretos en Git) ----
+.env*
+!.env.example
+google-services.json
+CREDENCIALES*.txt
+
+# ---- Android / claves de firma ----
+local.properties
+*.jks
+*.keystore
+
+# ---- IDE / SO ----
+.idea/
+*.iml
 .DS_Store
+*.log
 tsconfig.tsbuildinfo
 
 # Capturas de evidencia: material sensible, no debe versionarse
 b7363468-d479-422f-bbee-2fe68760917e.jpg
-
-# Credenciales operativas generadas por backend/scripts/rotar-credenciales.mjs
-database/CREDENCIALES_LOCALES.txt

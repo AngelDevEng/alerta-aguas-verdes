@@ -12,9 +12,16 @@ import '../../features/home/presentation/pages/home_page.dart';
 import '../../features/catalogos/presentation/bloc/catalogos_bloc.dart';
 import '../../features/catalogos/presentation/bloc/catalogos_event.dart';
 import '../../features/catalogos/presentation/pages/emergencias_page.dart';
-import '../../features/incidencias/presentation/pages/reportar_incidencia_page.dart';
+import '../../features/incidencias/presentation/bloc/incidencias_bloc.dart';
+import '../../features/incidencias/presentation/bloc/incidencias_event.dart';
+import '../../features/incidencias/presentation/bloc/incidencia_detalle_bloc.dart';
+import '../../features/incidencias/presentation/bloc/incidencia_detalle_event.dart';
+import '../../features/incidencias/presentation/bloc/reportar_bloc.dart';
 import '../../features/incidencias/presentation/pages/incidencias_page.dart';
+import '../../features/incidencias/presentation/pages/incidencia_detalle_page.dart';
+import '../../features/incidencias/presentation/pages/reportar_incidencia_page.dart';
 import '../di/injector.dart';
+import '../theme/app_theme.dart';
 import 'not_found_page.dart';
 
 /// Rutas de la app. Nombres centralizados para no repetir strings.
@@ -31,8 +38,8 @@ class Rutas {
 /// Puente BLoC -> GoRouter.
 ///
 /// GoRouter no conoce BLoC, y BLoC no debe conocer el router. Este
-/// [ChangeNotifier] traduce un `Stream<AuthState>` en la seÃ±al que
-/// `refreshListenable` espera, para que un cambio de sesion reevalÃºe el
+/// [ChangeNotifier] traduce un `Stream<AuthState>` en la señal que
+/// `refreshListenable` espera, para que un cambio de sesion reevalúe el
 /// `redirect` sin reconstruir la app.
 class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh(AuthBloc bloc) {
@@ -58,11 +65,26 @@ class AppRouter {
   /// Rutas que exigen rol de operador (SERENO/OPERADOR/ADMIN/DIRECTIVO).
   /// El backend igual valida con `@Roles`; esto solo evita mostrar una pantalla
   /// que el servidor iba a rechazar con 403.
+  ///
+  /// `Rutas.reportar` NO esta aca a proposito: `POST /incidencias` acepta
+  /// `CIUDADANO` en el backend, y Reportar es justamente la pantalla que mas le
+  /// importa a un vecino. Bloquearla seria quitarle la funcion principal de la
+  /// app a la mitad de los usuarios.
   static const _rutasProtegidas = <String>{
     Rutas.mapa,
     Rutas.incidencias,
-    Rutas.reportar,
   };
+
+  /// Si la ruta cae dentro de una zona que exige rol operativo.
+  ///
+  /// Compara por prefijo y no por igualdad exacta porque hay rutas con
+  /// parametros (`/incidencias/:id`). Con `contains` sobre `matchedLocation`, el
+  /// detalle de una incidencia se escapaba de la guarda y un ciudadano llegaba
+  /// hasta la pantalla para recibir un 403 del servidor. La guarda del cliente
+  /// no reemplaza a la del backend: solo evita mostrar una pantalla que el
+  /// servidor va a rechazar.
+  static bool _exigeOperador(String ruta) => _rutasProtegidas
+      .any((r) => ruta == r || ruta.startsWith('$r/'));
 
   late final GoRouter _router = GoRouter(
     initialLocation: Rutas.home,
@@ -79,11 +101,39 @@ class AppRouter {
           ),
           GoRoute(
             path: 'incidencias',
-            builder: (_, _) => const IncidenciasPage(),
+            // Igual que en emergencias: el Bloc nace en la ruta y dispara la
+            // carga inicial. Dejarlo al usuario abriria la pantalla en
+            // IncidenciasInicial para siempre.
+            builder: (_, _) => BlocProvider<IncidenciasBloc>(
+              create: (_) => sl<IncidenciasBloc>()..add(const CargarIncidencias()),
+              child: const IncidenciasPage(),
+            ),
+            routes: [
+              GoRoute(
+                path: ':id',
+                // El id viaja por la ruta, no por un evento: asi el bloc queda
+                // atado a una sola incidencia y una recarga no puede cambiarle
+                // el sujeto al operador. `registerFactoryParam` lo recibe por
+                // constructor.
+                builder: (context, state) {
+                  final id = state.pathParameters['id'] ?? '';
+                  return BlocProvider<IncidenciaDetalleBloc>(
+                    create: (_) => sl<IncidenciaDetalleBloc>(param1: id)
+                      ..add(const DetalleSolicitado()),
+                    child: const IncidenciaDetallePage(),
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: 'reportar',
-            builder: (_, _) => const ReportarIncidenciaPage(),
+            // Al volver, `pop(true)` le avisa a la pantalla anterior que hay una
+            // incidencia nueva, para que la lista se recargue.
+            builder: (_, _) => BlocProvider<ReportarBloc>(
+              create: (_) => sl<ReportarBloc>(),
+              child: const ReportarIncidenciaPage(),
+            ),
           ),
           GoRoute(
             path: 'emergencias',
@@ -109,13 +159,13 @@ class AppRouter {
       final enLogin = destino == Rutas.login;
 
       if (usuario == null) {
-        // Sin sesiÃ³n: solo se permite el login.
+        // Sin sesión: solo se permite el login.
         return enLogin ? null : Rutas.login;
       }
-      // Con sesiÃ³n: no quedarse en el login.
+      // Con sesión: no quedarse en el login.
       if (enLogin) return Rutas.home;
 
-      if (_rutasProtegidas.contains(destino) && usuario.esCiudadano) {
+      if (_exigeOperador(destino) && usuario.esCiudadano) {
         return Rutas.home;
       }
       return null;
@@ -130,10 +180,10 @@ class AppRouter {
   Widget build() => MaterialApp.router(
         title: 'Alerta Aguas Verdes',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF00695C)),
-          useMaterial3: true,
-        ),
+        // El tema vive en `core/theme`: la paleta del legacy esta ahi y no
+        // dispersa en cada widget.
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
         routerConfig: _router,
       );
 }

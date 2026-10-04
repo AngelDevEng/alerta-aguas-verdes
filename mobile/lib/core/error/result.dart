@@ -1,50 +1,17 @@
-/// Falla de dominio: error de negocio o de transporte, independiente del HTTP.
-///
-/// Se usa en vez de excepciones para que `domain/` nunca dependa de `dio`.
-///
-/// Es `abstract` y no `sealed` a proposito: cada feature define sus propias
-/// fallas (por ejemplo `ValidationFailure` en auth). `Result` si es `sealed`,
-/// porque ese si debe ser exhaustivo en los `switch`.
-abstract class Failure {
-  const Failure(this.message);
+import 'failures.dart';
 
-  final String message;
-
-  @override
-  String toString() => '$runtimeType: $message';
-}
-
-/// Sin conexion: no hubo respuesta del servidor.
-class NetworkFailure extends Failure {
-  const NetworkFailure([super.message = 'Sin conexion a la red']);
-}
-
-/// El servidor respondio 4xx/5xx.
-class ServerFailure extends Failure {
-  const ServerFailure(this.statusCode, super.message);
-
-  final int statusCode;
-}
-
-/// Credenciales ausentes, invalidas o expiradas sin possibility de refresh.
-class AuthFailure extends Failure {
-  const AuthFailure([super.message = 'Sesion expirada. Inicia sesion otra vez.']);
-}
-
-/// El recurso solicitado no existe.
-class NotFoundFailure extends Failure {
-  const NotFoundFailure([super.message = 'Recurso no encontrado']);
-}
-
-/// Fallo local: GPS denegado, sin permiso, cache corrupta, etc.
-class LocalFailure extends Failure {
-  const LocalFailure(super.message);
-}
+// La jerarquia de fallas vive en `failures.dart`. Se reexporta para que los
+// imports existentes (`import '.../core/error/result.dart'`) sigan resolviendo
+// sin tocar 40 archivos.
+export 'failures.dart';
 
 /// Resultado explicito de una operacion.
 ///
 /// Evita `try/catch` en widgets y `null` ambiguos: el compilador obliga a
 /// manejar ambos casos del camino feliz y del fallido.
+///
+/// Es `sealed` (a diferencia de [Failure]) porque el `switch` sobre el
+/// resultado si debe ser exhaustivo.
 sealed class Result<T> {
   const Result();
 

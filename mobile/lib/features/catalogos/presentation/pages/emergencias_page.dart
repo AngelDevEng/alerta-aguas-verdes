@@ -9,8 +9,8 @@ import '../bloc/catalogos_state.dart';
 
 /// Central de emergencias.
 ///
-/// Endpoint pÃºblico a propÃ³sito: los telÃ©fonos deben estar disponibles aunque la
-/// sesiÃ³n haya caducado. Es el equivalente mÃ³vil de `@Public()` en NestJS.
+/// Endpoint público a propósito: los teléfonos deben estar disponibles aunque la
+/// sesión haya caducado. Es el equivalente móvil de `@Public()` en NestJS.
 class EmergenciasPage extends StatelessWidget {
   const EmergenciasPage({super.key});
 

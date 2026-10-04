@@ -7,20 +7,22 @@ import '../storage/token_store.dart';
 
 /// Inyecta `Authorization: Bearer <access>` en cada peticion.
 ///
-/// Las rutas publicas (emergencias, crear alerta SOS) no llevan token: asi
-/// siguen funcionando con la sesion caida, que es el requisito del caso SOS.
+/// Una peticion se declara publica en el *call site*:
+///
+/// ```dart
+/// api.post<AuthSessionDto>('/auth/login', body: {...}, publico: true, parse: ...);
+/// ```
+///
+/// No se deduce del path. Antes habia una lista `publicPaths` con
+/// `'/incidencias'` en ella, que era peor que no tenerla: el mismo path sirve
+/// para el `POST` de reportar y para el `GET` de listar, y el segundo si exige
+/// token (`@Roles('SERENO','OPERADOR','ADMIN','DIRECTIVO')`). Cualquier
+/// casamiento por prefijo habria desautorizado la lista. El opt-in explicito
+/// no puede tener ese error.
 class AuthInterceptor extends Interceptor {
   AuthInterceptor({required this.tokens});
 
   final TokenStore tokens;
-
-  static const publicPaths = <String>[
-    '/auth/login',
-    '/auth/refresh',
-    '/catalogos/emergencias',
-    '/alertas',
-    '/incidencias', // POST: ciudadano puede reportar sin operacion previa
-  ];
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
@@ -38,6 +40,11 @@ class AuthInterceptor extends Interceptor {
 ///
 /// Sin el lock, varias peticiones concurrentes (mapa + GPS + lista) dispararian
 /// N refreshes y N rotaciones, y el backend invalida el refresh en cada uso.
+///
+/// Depende de que `ApiClient` deje que los 4xx lleguen hasta aca como
+/// `DioException`. Si `validateStatus` los acepta, `onError` no corre y el
+/// refresh queda muerto sin que nada avise: ver el comentario en
+/// `ApiClient` sobre ese flag.
 class RefreshInterceptor extends Interceptor {
   RefreshInterceptor({required this.tokens, required this.dio});
 

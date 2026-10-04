@@ -37,6 +37,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       _api.post<AuthSessionDto>(
         '/auth/login',
         body: {'dni': dni, 'password': password},
+        publico: true,
         parse: (data) => AuthSessionDto.fromJson(_asMap(data)),
       );
 
@@ -45,6 +46,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       _api.post<AuthSessionDto>(
         '/auth/refresh',
         body: {'refreshToken': refreshToken},
+        publico: true,
         parse: (data) => AuthSessionDto.fromJson(_asMap(data)),
       );
 
@@ -52,6 +54,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<Result<void>> logout(String refreshToken) => _api.post<void>(
         '/auth/logout',
         body: {'refreshToken': refreshToken},
+        publico: true,
         parse: (_) {},
       );
 
