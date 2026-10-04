@@ -1,15 +1,20 @@
 import {
-  Injectable, Logger, UnauthorizedException,
+  HttpException, HttpStatus, Injectable, Logger, UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import * as bcrypt from 'bcryptjs';
-import { LoginDto } from './dto/login.dto';
+import { LoginDto, LoginPatrulleroDto } from './dto/login.dto';
 import { JwtPayload, UsuarioAutenticado } from '../common/types';
 
 const REFRESH_DIAS = 30;
+
+// Hash bcrypt de una cadena aleatoria (no utilizable como contrasena). Se
+// compara cuando la placa no existe o la unidad esta borrada: asi el tiempo de
+// respuesta no delata si la placa esta dada de alta.
+const HASH_DUMMY = '$2a$12$Z.ePFUvGF3GWytR.Nq5rqug93PWFWUi0SCZ0sc1wnGkdJcFnbChUu';
 
 @Injectable()
 export class AuthService {
@@ -46,6 +51,85 @@ export class AuthService {
       email: u.email, rol: u.rol, rolId: u.rol_id,
     };
     return this.emitirTokens(usuario);
+  }
+
+  /**
+   * Login de un sereno por placa de su unidad asignada.
+   *
+   * Recorre placa -> unidades_serenazgo.responsable_id -> usuarios (rol
+   * SERENO) y valida el mismo password_hash que el login por DNI. No se toca
+   * el esquema de usuarios.
+   *
+   * - Placa normalizada (mayusculas, sin espacios) antes de comparar.
+   * - Mensaje generico y bcrypt dummy aunque la placa no exista: no revela en
+   *   el texto ni en el tiempo si la unidad esta dada de alta.
+   * - Limite de intentos por IP y por placa (ver dentroDeLimite).
+   * - Las unidades con tipo PIE no tienen placa: su sereno entra por DNI con
+   *   POST /auth/login, igual que hasta ahora.
+   */
+  async loginPatrullero(dto: LoginPatrulleroDto, ip: string) {
+    const placa = dto.placa.trim().toUpperCase().replace(/\s+/g, '');
+
+    // Rate limit antes de tocar la base, para que el brute-force no cueste
+    // cada intento una consulta.
+    if (!this.dentroDeLimite(this.intentosIp, ip, AuthService.LIMITE_IP)) {
+      throw new HttpException('Demasiados intentos. Espera un momento.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (!this.dentroDeLimite(this.intentosPlaca, placa, AuthService.LIMITE_PLACA)) {
+      throw new HttpException('Demasiados intentos. Espera un momento.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    const [u] = await this.ds.query(
+      `SELECT u.id, u.dni, u.nombres, u.apellidos, u.email, u.password_hash, u.activo,
+              r.nombre AS rol, r.id AS rol_id
+         FROM unidades_serenazgo s
+         JOIN usuarios u ON u.id = s.responsable_id
+         JOIN roles r ON r.id = u.rol_id
+        WHERE s.placa = $1
+          AND r.nombre = 'SERENO'
+          AND s.eliminado_en IS NULL`,
+      [placa],
+    );
+
+    // Mismo camino de tiempo aunque la placa no tenga alta: compare contra un
+    // hash bcrypt valido pero inutilizable.
+    const coincide = bcrypt.compareSync(dto.password, u?.password_hash ?? HASH_DUMMY);
+    if (!u || !coincide) throw new UnauthorizedException('Credenciales invalidas');
+    if (!u.activo) throw new UnauthorizedException('Usuario desactivado');
+
+    // Exito: se limpia el contador de esa placa para no castigar al operador
+    // que fatiga al tipear.
+    this.intentosPlaca.delete(placa);
+    this.intentosIp.delete(ip);
+
+    const usuario: UsuarioAutenticado = {
+      id: u.id, dni: u.dni, nombres: u.nombres, apellidos: u.apellidos,
+      email: u.email, rol: u.rol, rolId: u.rol_id,
+    };
+    return this.emitirTokens(usuario);
+  }
+
+  private readonly intentosIp = new Map<string, number[]>();
+  private readonly intentosPlaca = new Map<string, number[]>();
+  private static readonly VENTANA_MS = 15 * 60_000;
+  private static readonly LIMITE_IP = 30;
+  private static readonly LIMITE_PLACA = 8;
+
+  /**
+   * Limite en memoria de intentos por ventana deslizante. Para una sola
+   * instancia de la API alcanza; si se escale a varias, esto tiene que pasar
+   * por Redis (o se cuenta por separado en cada instancia).
+   */
+  private dentroDeLimite(mapa: Map<string, number[]>, clave: string, limite: number): boolean {
+    const ahora = Date.now();
+    const recientes = (mapa.get(clave) ?? []).filter((t) => ahora - t < AuthService.VENTANA_MS);
+    if (recientes.length >= limite) {
+      mapa.set(clave, recientes);
+      return false;
+    }
+    recientes.push(ahora);
+    mapa.set(clave, recientes);
+    return true;
   }
 
   async refrescar(refreshToken: string) {

@@ -1,7 +1,8 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Request } from 'express';
 import { AuthService } from './auth.service';
-import { LoginDto, RefreshDto } from './dto/login.dto';
+import { LoginDto, LoginPatrulleroDto, RefreshDto } from './dto/login.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { UsuarioAutenticado } from '../common/types';
@@ -15,6 +16,15 @@ export class AuthController {
   @Post('login')
   @HttpCode(200)
   login(@Body() dto: LoginDto) { return this.svc.login(dto); }
+
+  @Public()
+  @Post('login/patrullero')
+  @HttpCode(200)
+  loginPatrullero(@Body() dto: LoginPatrulleroDto, @Req() req: Request) {
+    // req.ip es la IP que Express resuelve; detras de un proxy conviene
+    // activar 'trust proxy' en la app para que responda la IP real.
+    return this.svc.loginPatrullero(dto, req.ip ?? 'desconocido');
+  }
 
   @Public()
   @Post('refresh')
