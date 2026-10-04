@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { DataSource } from 'typeorm';
 import { CreateIncidenciaDto } from './dto/create-incidencia.dto';
 import { QueryIncidenciaDto } from './dto/query-incidencia.dto';
+import { ZonasCalorQueryDto } from './dto/zonas-calor-query.dto';
 
 const SELECT_BASE = `
   SELECT i.id, i.codigo, t.nombre AS tipo, i.tipo_id AS "tipoId", i.descripcion, i.estado, i.prioridad,
@@ -118,5 +119,53 @@ export class IncidenciasService {
   async geojson() {
     const rows = await this.ds.query(`SELECT feature FROM v_incidencias_geojson ORDER BY ocurrido_en DESC LIMIT 1000`);
     return { type: 'FeatureCollection', features: rows.map((r: any) => r.feature) };
+  }
+
+  /**
+   * Mapa de calor: incidencias agrupadas en una grilla de ~100 m.
+   *
+   * La proyeccion metrica (EPSG:32717, UTM zona 17S, sobre Aguas Verdes) es
+   * la que da sentido al "~100 m": en EPSG:4326 un grado de lat no es un
+   * grado de lon y ST_SnapToGrid cortaria las celdas chuecas. De la grilla se
+   * devuelve solo lo agregado: peso y tipo mas comun, nunca filas de
+   * incidencias.
+   *
+   * `tipo_mas_comun` sale de `mode()` sobre el nombre de tipo dentro de la
+   * celda. Umbrales visuales: 1-3 amarillo, 4-8 naranja, 9+ rojo (ver
+   * docs/MAPABASE.md).
+   */
+  async zonasCalor(q: ZonasCalorQueryDto) {
+    const params: any[] = [];
+    let w = 'TRUE';
+    if (q.desde) { params.push(q.desde); w += ` AND i.ocurrido_en >= $${params.length}`; }
+    if (q.hasta) { params.push(q.hasta); w += ` AND i.ocurrido_en <= $${params.length}`; }
+    if (q.tipo) {
+      params.push(q.tipo.toLowerCase());
+      w += ` AND (lower(t.nombre) = $${params.length} OR lower(t.codigo) = $${params.length})`;
+    }
+
+    return this.ds.query(
+      `WITH pts AS (
+         SELECT ST_SnapToGrid(ST_Transform(i.ubicacion::geometry, 32717), 100) AS celda,
+                t.nombre AS tipo
+           FROM incidencias i
+           JOIN tipos_incidencia t ON t.id = i.tipo_id
+          WHERE ${w}
+       ),
+       agg AS (
+         SELECT celda, count(*)::int AS peso,
+                mode() WITHIN GROUP (ORDER BY tipo) AS tipo_mas_comun
+           FROM pts
+          GROUP BY celda
+       )
+       SELECT round(ST_Y(ST_Transform(ST_Centroid(celda), 4326))::numeric, 6)::float AS lat,
+              round(ST_X(ST_Transform(ST_Centroid(celda), 4326))::numeric, 6)::float AS lng,
+              peso,
+              tipo_mas_comun AS "tipo_mas_comun"
+         FROM agg
+        ORDER BY peso DESC
+        LIMIT 500`,
+      params,
+    );
   }
 }
