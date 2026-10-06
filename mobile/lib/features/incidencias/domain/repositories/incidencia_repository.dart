@@ -2,6 +2,7 @@ import '../../../../core/error/result.dart';
 import '../../domain/entities/detalle_incidencia.dart';
 import '../../domain/entities/evidencia.dart';
 import '../../domain/entities/incidencia.dart';
+import '../../domain/entities/incidencia_mapa.dart';
 import '../../domain/entities/tipo_incidencia.dart';
 
 /// Contrato de persistencia de incidencias, definido en `domain/`.
@@ -11,6 +12,15 @@ abstract interface class IncidenciaRepository {
   /// Lista paginada con filtros. Devuelve la pagina pedida, no un `Stream`: el
   /// backend no expone SSE ni websockets.
   Future<Result<PaginaIncidencias>> listar(FiltrosIncidencia filtros);
+
+  /// Ultimas 1000 incidencias como puntos, para pintarlas en el mapa
+  /// (`GET /incidencias/geojson`).
+  ///
+  /// A diferencia de [listar] no pagina ni filtra: el servidor corta en 1000 y
+  /// el mapa las dibuja todas. Si un feature del `FeatureCollection` viene
+  /// roto se descarta en el datasource, no aqui: un punto malformado no puede
+  /// borrar el mapa entero.
+  Future<Result<List<IncidenciaMapa>>> geojson();
 
   /// Detalle de una incidencia, con historial y evidencias.
   Future<Result<DetalleIncidencia>> obtenerDetalle(String id);

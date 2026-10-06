@@ -26,6 +26,7 @@ import '../../features/incidencias/domain/usecases/incidencia_usecases.dart';
 import '../../features/incidencias/presentation/bloc/incidencias_bloc.dart';
 import '../../features/incidencias/presentation/bloc/incidencia_detalle_bloc.dart';
 import '../../features/incidencias/presentation/bloc/reportar_bloc.dart';
+import '../../features/mapa/presentation/bloc/mapa_bloc.dart';
 import '../../features/unidades/data/datasources/unidad_remote_datasource.dart';
 import '../../features/unidades/data/repositories/unidad_repository_impl.dart';
 import '../../features/unidades/domain/repositories/unidad_repository.dart';
@@ -153,6 +154,9 @@ Future<void> configureDependencies() async {
       sl<SubirEvidenciaUseCase>(),
     ),
   );
+  sl.registerFactory(
+    () => ObtenerIncidenciasMapaUseCase(sl<IncidenciaRepository>()),
+  );
 
   // El detalle recibe el id por constructor: el router lo resuelve desde los
   // parametros de la ruta, asi que el factory toma el id como argumento en vez
@@ -193,6 +197,13 @@ Future<void> configureDependencies() async {
   sl.registerFactory(() => EnviarSosUseCase(sl<AlertaRepository>()));
   // Factory: cada apertura del home arranca sin el estado del envio anterior.
   sl.registerFactory(() => SosBloc(sl<LocationService>(), sl<EnviarSosUseCase>()));
+
+  // --- mapa ---
+  // Factory, no singleton: cada apertura de `/mapa` vuelve a pedir la capa de
+  // incidencias y la posicion, sin arrastrar marcadores de la visita anterior.
+  sl.registerFactory(
+    () => MapaBloc(sl<ObtenerIncidenciasMapaUseCase>(), sl<LocationService>()),
+  );
 
   // --- ubicacion ---
   // Sin estado: el permiso se resuelve en cada llamada, no se cachea para que

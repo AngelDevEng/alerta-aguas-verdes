@@ -20,6 +20,9 @@ import '../../features/incidencias/presentation/bloc/reportar_bloc.dart';
 import '../../features/incidencias/presentation/pages/incidencias_page.dart';
 import '../../features/incidencias/presentation/pages/incidencia_detalle_page.dart';
 import '../../features/incidencias/presentation/pages/reportar_incidencia_page.dart';
+import '../../features/mapa/presentation/bloc/mapa_bloc.dart';
+import '../../features/mapa/presentation/bloc/mapa_event.dart';
+import '../../features/mapa/presentation/pages/mapa_page.dart';
 import '../di/injector.dart';
 import '../theme/app_theme.dart';
 import 'not_found_page.dart';
@@ -97,7 +100,13 @@ class AppRouter {
         routes: [
           GoRoute(
             path: 'mapa',
-            builder: (_, _) => const _MapaPage(),
+            // Igual que en incidencias: el Bloc nace en la ruta y dispara la
+            // carga inicial. Sin eso la pantalla quedaria en MapaInicial para
+            // siempre.
+            builder: (_, _) => BlocProvider<MapaBloc>(
+              create: (_) => sl<MapaBloc>()..add(const CargarMapa()),
+              child: const MapaPage(),
+            ),
           ),
           GoRoute(
             path: 'incidencias',
@@ -186,19 +195,6 @@ class AppRouter {
         darkTheme: AppTheme.dark,
         routerConfig: _router,
       );
-}
-
-/// Placeholder del mapa con `flutter_map` + tiles de OSM.
-/// Se implementa en la feature `mapa`.
-class _MapaPage extends StatelessWidget {
-  const _MapaPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('Mapa operativo')),
-    );
-  }
 }
 
 class _PerfilPage extends StatelessWidget {
