@@ -17,12 +17,27 @@ class AuthSessionDto extends Equatable {
   final int expiresIn;
   final UsuarioDto usuario;
 
+  // Sin casts duros: ante un cuerpo inesperado devuelve strings vacios en vez de
+  // lanzar. La forma del exito esta garantizada por el backend, pero parsear no
+  // debe ser la capa que reporta el error.
   factory AuthSessionDto.fromJson(Map<String, dynamic> json) => AuthSessionDto(
-        accessToken: json['accessToken'] as String,
-        refreshToken: json['refreshToken'] as String,
+        accessToken: json['accessToken']?.toString() ??
+            json['token']?.toString() ??
+            '',
+        refreshToken: json['refreshToken']?.toString() ?? '',
         expiresIn: (json['expiresIn'] as num?)?.toInt() ?? 900,
         usuario: UsuarioDto.fromJson(
-          Map<String, dynamic>.from(json['usuario'] as Map),
+          Map<String, dynamic>.from(
+            (json['usuario'] as Map?) ??
+                // El backend tambien expone el usuario plano.
+                <String, dynamic>{
+                  'id': json['id'],
+                  'dni': json['dni'],
+                  'nombreCompleto': json['nombreCompleto'] ?? json['nombre'],
+                  'rol': json['rol'],
+                  'email': json['email'],
+                },
+          ),
         ),
       );
 
