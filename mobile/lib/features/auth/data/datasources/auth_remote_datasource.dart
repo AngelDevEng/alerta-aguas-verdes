@@ -33,13 +33,25 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<Result<AuthSessionDto>> login({
     required String dni,
     required String password,
-  }) =>
-      _api.post<AuthSessionDto>(
-        '/auth/login',
-        body: {'dni': dni, 'password': password},
-        publico: true,
-        parse: (data) => AuthSessionDto.fromJson(_asMap(data)),
-      );
+  }) async {
+    final res = await _api.post<AuthSessionDto>(
+      '/auth/login',
+      body: {'dni': dni, 'password': password},
+      publico: true,
+      parse: (data) => AuthSessionDto.fromJson(_asMap(data)),
+    );
+
+    // Un 401 en este endpoint siempre es dni o password incorrectos. El mensaje
+    // por defecto de AuthFailure ("sesion expirada") confundiria al usuario, asi
+    // que se reemplaza solo aqui y no en los demas 401 de la app.
+    if (res is Err<AuthSessionDto>) {
+      final f = res.failure;
+      if (f is AuthFailure) {
+        return const Err<AuthSessionDto>(AuthFailure('Credenciales incorrectas'));
+      }
+    }
+    return res;
+  }
 
   @override
   Future<Result<AuthSessionDto>> refresh(String refreshToken) =>

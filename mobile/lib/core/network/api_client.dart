@@ -20,7 +20,7 @@ class ApiClient {
       // Render y Supabase presentan certificados validos; si se usa un
       // certificado autofirmado en staging, extraer la excepcion aqui.
       //
-      // Solo 2xx se considera exito, y es load-bearing. Con `status < 500` dio
+      // Solo 2xx se considera exito, y es load-bearing. Con `status < 500`
       // resolvia los 4xx en `onResponse` sin lanzar, y entonces:
       //   - `onError` del `RefreshInterceptor` nunca corria, asi que un token
       //     expirado no se refrescaba nunca;

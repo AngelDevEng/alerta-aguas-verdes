@@ -178,15 +178,29 @@ export class AuthService {
     // Limpieza oportunista de tokens vencidos.
     await this.ds.query(`DELETE FROM refresh_tokens WHERE expira_en < now()`).catch(() => undefined);
 
+    const nombreCompleto = `${usuario.nombres ?? ''} ${usuario.apellidos ?? ''}`.trim() || usuario.dni;
+
     return {
+      success: true,
+      // Alias para la app Kotlin legacy, que lee `token` y `nombre`.
+      token: accessToken,
+      nombre: nombreCompleto,
+      id: usuario.id,
+      rol: usuario.rol,
+      email: usuario.email ?? null,
       accessToken,
       refreshToken,
       tokenType: 'Bearer',
       expiresIn: this.jwtTtlSegundos(),
+      dni: usuario.dni,
+      nombreCompleto,
+      // Mismo usuario anidado: es lo que lee el cliente Flutter.
       usuario: {
-        id: usuario.id, dni: usuario.dni,
-        nombreCompleto: `${usuario.nombres} ${usuario.apellidos}`,
-        email: usuario.email, rol: usuario.rol,
+        id: usuario.id,
+        dni: usuario.dni,
+        nombreCompleto,
+        email: usuario.email ?? null,
+        rol: usuario.rol,
       },
     };
   }
