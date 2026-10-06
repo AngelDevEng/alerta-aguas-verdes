@@ -169,6 +169,9 @@ Future<void> configureDependencies() async {
     () => UnidadRepositoryImpl(sl<UnidadRemoteDataSource>()),
   );
   sl.registerFactory(
+    () => ListarUnidadesUseCase(sl<UnidadRepository>()),
+  );
+  sl.registerFactory(
     () => ListarUnidadesDespachablesUseCase(sl<UnidadRepository>()),
   );
   sl.registerFactory(

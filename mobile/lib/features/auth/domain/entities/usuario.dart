@@ -46,6 +46,12 @@ class Usuario {
   /// limitacion que se pueda sortear desde la app.
   bool get puedeVerDetalle => esOperador;
 
+  /// Si es sereno: equivale al rol `PATRULLERO` del legacy.
+  ///
+  /// El menu principal le muestra el panel de patrulla (placa + rastreo) y
+  /// oculta SOS/Emergencia, igual que `MenuActivity.configurarVisibilidadSegunRol`.
+  bool get esSereno => rol == 'SERENO';
+
   /// Si puede avanzar el estado (`PATCH /incidencias/:id/estado`).
   ///
   /// Un `DIRECTIVO` queda fuera: ve todos los casos pero no los despacha.
