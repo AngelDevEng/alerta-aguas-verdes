@@ -4,9 +4,11 @@ import {
 import { Request, Response } from 'express';
 
 /**
- * Evita que los errores de Postgres (violaciones de FK, checks, duplicados) y los
- * errores de multer (archivo muy grande, MIME inesperado) se filtren al cliente
- * como 500 con el detalle de la consulta.
+ * Unica forma de error de toda la API (ver `common/dto/respuesta-error.dto.ts`).
+ *
+ * Ademas de estandarizar, evita que los errores de Postgres (violaciones de FK,
+ * checks, duplicados) y los de multer (archivo muy grande, MIME inesperado) se
+ * filtren al cliente como 500 con el detalle de la consulta.
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -17,18 +19,27 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const res = ctx.getResponse<Response>();
     const req = ctx.getRequest<Request>();
 
+    const responder = (status: number, mensajes: string[]) => {
+      const mensaje = mensajes[0] ?? 'Error interno del servidor';
+      return res.status(status).json({
+        success: false,
+        statusCode: status,
+        mensaje,
+        message: mensaje,
+        mensajes,
+        ruta: req.url,
+      });
+    };
+
     if (excepcion instanceof HttpException) {
       const status = excepcion.getStatus();
       const cuerpo = excepcion.getResponse();
-      const mensaje =
+      const crudo =
         typeof cuerpo === 'string'
           ? cuerpo
           : ((cuerpo as { message?: string | string[] }).message ?? excepcion.message);
-      return res.status(status).json({
-        statusCode: status,
-        mensaje: Array.isArray(mensaje) ? mensaje : [mensaje],
-        ruta: req.url,
-      });
+      const lista = (Array.isArray(crudo) ? crudo : [crudo]).map(String);
+      return responder(status, lista.length ? lista : ['Error interno del servidor']);
     }
 
     const e = excepcion as { code?: string; message?: string };
@@ -47,25 +58,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (e?.code && porCodigo[e.code]) {
       const [status, mensaje] = porCodigo[e.code];
       this.logger.warn(`${req.method} ${req.url} -> ${status} (${e.code})`);
-      return res.status(status).json({ statusCode: status, mensaje: [mensaje], ruta: req.url });
+      return responder(status, [mensaje]);
     }
 
     // multer
     const em = e?.message ?? '';
     if (em.includes('File too large')) {
-      return res.status(HttpStatus.PAYLOAD_TOO_LARGE).json({
-        statusCode: HttpStatus.PAYLOAD_TOO_LARGE, mensaje: ['El archivo supera el limite de 15 MB'], ruta: req.url });
+      return responder(HttpStatus.PAYLOAD_TOO_LARGE, ['El archivo supera el limite de 15 MB']);
     }
     if (em.includes('LIMIT_') || em.includes('Unexpected field')) {
-      return res.status(HttpStatus.BAD_REQUEST).json({
-        statusCode: HttpStatus.BAD_REQUEST, mensaje: ['Archivo invalido o campo inesperado'], ruta: req.url });
+      return responder(HttpStatus.BAD_REQUEST, ['Archivo invalido o campo inesperado']);
     }
 
     this.logger.error(`${req.method} ${req.url} -> 500`, em);
-    return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      mensaje: ['Error interno del servidor'],
-      ruta: req.url,
-    });
+    return responder(HttpStatus.INTERNAL_SERVER_ERROR, ['Error interno del servidor']);
   }
 }
