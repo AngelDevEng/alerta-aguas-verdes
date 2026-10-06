@@ -43,6 +43,39 @@ class LoginUseCase {
   }
 }
 
+/// Caso de uso: iniciar sesion como sereno con la placa de su unidad.
+///
+/// Normaliza la placa igual que el backend (mayúsculas, sin espacios) antes de
+/// enviarla: el operador la teclea desde un celular y la unidad se guarda como
+/// 'EGA-123' pero suele llegar como 'ega 123'.
+class LoginPorPlacaUseCase {
+  const LoginPorPlacaUseCase(this._repo);
+
+  final AuthRepository _repo;
+
+  Future<Result<Usuario>> call(String placa, String password) async {
+    final placaNormalizada = placa.trim().toUpperCase().replaceAll(RegExp(r'\s+'), '');
+    if (placaNormalizada.isEmpty) {
+      return const Err(ValidationFailure('Ingresa la placa de tu unidad'));
+    }
+    if (placaNormalizada.length < 4 || placaNormalizada.length > 10) {
+      return const Err(ValidationFailure('La placa debe tener entre 4 y 10 caracteres'));
+    }
+    if (password.isEmpty) {
+      return const Err(ValidationFailure('Ingresa tu contrasena'));
+    }
+
+    try {
+      final session = await _repo.loginPorPlaca(
+        LoginPlacaRequest(placa: placaNormalizada, password: password),
+      );
+      return Ok(session.usuario);
+    } on Failure catch (f) {
+      return Err(f);
+    }
+  }
+}
+
 /// Caso de uso: cerrar sesion revocando el refresh en el servidor.
 class LogoutUseCase {
   const LogoutUseCase(this._repo);

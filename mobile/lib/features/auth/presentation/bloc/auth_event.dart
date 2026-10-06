@@ -27,6 +27,20 @@ class AuthLoginSolicitado extends AuthEvent {
   List<Object?> get props => [dni, password];
 }
 
+/// Login de sereno por placa de su unidad.
+class AuthLoginPlacaSolicitado extends AuthEvent {
+  const AuthLoginPlacaSolicitado({
+    required this.placa,
+    required this.password,
+  });
+
+  final String placa;
+  final String password;
+
+  @override
+  List<Object?> get props => [placa, password];
+}
+
 class AuthLogoutSolicitado extends AuthEvent {
   const AuthLogoutSolicitado();
 }

@@ -14,6 +14,11 @@ abstract interface class AuthRemoteDataSource {
     required String password,
   });
 
+  Future<Result<AuthSessionDto>> loginPorPlaca({
+    required String placa,
+    required String password,
+  });
+
   Future<Result<AuthSessionDto>> refresh(String refreshToken);
 
   Future<Result<void>> logout(String refreshToken);
@@ -33,17 +38,38 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<Result<AuthSessionDto>> login({
     required String dni,
     required String password,
-  }) async {
+  }) =>
+      _ingresar(
+        '/auth/login',
+        {'dni': dni, 'password': password},
+      );
+
+  @override
+  Future<Result<AuthSessionDto>> loginPorPlaca({
+    required String placa,
+    required String password,
+  }) =>
+      _ingresar(
+        '/auth/login/patrullero',
+        {'placa': placa, 'password': password},
+      );
+
+  /// POST de login generico: ambos endpoints comparten parseo y el mismo
+  /// mapeo de 401 a "Credenciales incorrectas".
+  Future<Result<AuthSessionDto>> _ingresar(
+    String ruta,
+    Map<String, dynamic> body,
+  ) async {
     final res = await _api.post<AuthSessionDto>(
-      '/auth/login',
-      body: {'dni': dni, 'password': password},
+      ruta,
+      body: body,
       publico: true,
       parse: (data) => AuthSessionDto.fromJson(_asMap(data)),
     );
 
-    // Un 401 en este endpoint siempre es dni o password incorrectos. El mensaje
-    // por defecto de AuthFailure ("sesion expirada") confundiria al usuario, asi
-    // que se reemplaza solo aqui y no en los demas 401 de la app.
+    // Un 401 en estos endpoints siempre es credencial incorrecta. El mensaje
+    // por defecto de AuthFailure ("sesion expirada") confundiria al usuario,
+    // asi que se reemplaza solo aqui y no en los demas 401 de la app.
     if (res is Err<AuthSessionDto>) {
       final f = res.failure;
       if (f is AuthFailure) {

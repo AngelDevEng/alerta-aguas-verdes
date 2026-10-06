@@ -9,6 +9,9 @@ import '../entities/usuario.dart';
 abstract interface class AuthRepository {
   Future<AuthSession> login(LoginRequest request);
 
+  /// Login de sereno por placa de su unidad asignada.
+  Future<AuthSession> loginPorPlaca(LoginPlacaRequest request);
+
   /// Usuario cacheado localmente, o `null` si no hay sesion.
   Future<Usuario?> restoreSession();
 

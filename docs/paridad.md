@@ -11,7 +11,7 @@
 
 | # | Pantalla legacy (Activity) | Funciones legacy | Equivalente Flutter | Estado | Evidencia |
 |---|---|---|---|---|---|
-| 1 | `InicioActivity` (login) | 3 accesos: Admin (usuario+password), Serenazgo (placa+DNI vía `login_patrullero.php`), Ciudadano (sin credenciales) | `login_page.dart` (solo DNI+password) | **Parcial** | `InicioActivity.kt:74-272`; `login_page.dart:74-103` |
+| 1 | `InicioActivity` (login) | 3 accesos: Admin (usuario+password), Serenazgo (placa+DNI vía `login_patrullero.php`), Ciudadano (sin credenciales) | `login_page.dart` con selector DNI / Placa → `POST /auth/login` y `POST /auth/login/patrullero` | **Parcial** (ciudadano sin credenciales pendiente: el backend nuevo no expide token anónimo y `POST /incidencias` exige token) | `InicioActivity.kt:74-272`; `login_page.dart:74-103` |
 | 2 | `MainActivity` (panel ADMIN) | CRUD de unidades/serenazgos: alta, edición, baja, buscar por placa, asociaciones, foto, botón "Ver Monitoreo" | — (feature `unidades` sin `presentation/`) | **Falta** | `MainActivity.kt:138-144`; `mobile/lib/features/unidades/` solo data+domain |
 | 3 | `MenuActivity` (menú por rol) | SOS "Ubicación", Emergencia, Reportar Incidente, Mapa de Calor, Ingresar placa, Iniciar/Detener rastreo, Ver mapa | `home_page.dart` (Reportar, Emergencias, Incidencias, Mapa placeholder, Perfil placeholder) | **Parcial** | `MenuActivity.kt:71-154`; `home_page.dart:29-76`; `app_router.dart:193-213` |
 | 4 | `ReportarIncidenteActivity` | Formulario: tipo, urgencia, descripción, dirección, GPS, enviar | `reportar_incidencia_page.dart` (tipo desde catálogo, prioridad, GPS obligatorio, fotos con reintento, geocoding) | **Hecho** (supera al legacy) | `ReportarIncidenteActivity.kt:87-196`; `reportar_incidencia_page.dart:57-162` |

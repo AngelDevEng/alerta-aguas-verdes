@@ -21,24 +21,40 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _dniCtrl = TextEditingController();
+  final _placaCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _ocultarPass = true;
+
+  /// `false` = ingreso por DNI (admin/operador/sereno), `true` = ingreso de
+  /// sereno por placa de su unidad (POST /auth/login/patrullero).
+  bool _porPlaca = false;
 
   @override
   void dispose() {
     _dniCtrl.dispose();
+    _placaCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
 
   void _enviar() {
     FocusScope.of(context).unfocus();
-    GetIt.I<AuthBloc>().add(
-          AuthLoginSolicitado(
-            dni: _dniCtrl.text,
-            password: _passCtrl.text,
-          ),
-        );
+    final bloc = GetIt.I<AuthBloc>();
+    if (_porPlaca) {
+      bloc.add(
+        AuthLoginPlacaSolicitado(
+          placa: _placaCtrl.text,
+          password: _passCtrl.text,
+        ),
+      );
+    } else {
+      bloc.add(
+        AuthLoginSolicitado(
+          dni: _dniCtrl.text,
+          password: _passCtrl.text,
+        ),
+      );
+    }
   }
 
   @override
@@ -71,17 +87,52 @@ class _LoginPageState extends State<LoginPage> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 32),
-                      TextFormField(
-                        controller: _dniCtrl,
-                        enabled: !cargando,
-                        keyboardType: TextInputType.number,
-                        maxLength: 8,
-                        decoration: const InputDecoration(
-                          labelText: 'DNI',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.badge_outlined),
-                        ),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment(
+                            value: false,
+                            label: Text('DNI'),
+                            icon: Icon(Icons.badge_outlined),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            label: Text('Placa'),
+                            icon: Icon(Icons.local_police_outlined),
+                          ),
+                        ],
+                        selected: {_porPlaca},
+                        showSelectedIcon: false,
+                        onSelectionChanged: (sel) =>
+                            setState(() => _porPlaca = sel.first),
                       ),
+                      const SizedBox(height: 16),
+                      if (_porPlaca)
+                        TextFormField(
+                          controller: _placaCtrl,
+                          enabled: !cargando,
+                          keyboardType: TextInputType.text,
+                          textCapitalization: TextCapitalization.characters,
+                          maxLength: 10,
+                          decoration: const InputDecoration(
+                            labelText: 'Placa de la unidad',
+                            hintText: 'EGA-123',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.local_police_outlined),
+                          ),
+                          onFieldSubmitted: (_) => _enviar(),
+                        )
+                      else
+                        TextFormField(
+                          controller: _dniCtrl,
+                          enabled: !cargando,
+                          keyboardType: TextInputType.number,
+                          maxLength: 8,
+                          decoration: const InputDecoration(
+                            labelText: 'DNI',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _passCtrl,
