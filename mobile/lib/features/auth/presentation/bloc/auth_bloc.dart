@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/result.dart';
+import '../../domain/entities/usuario.dart';
 import '../../domain/usecases/auth_usecases.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
@@ -18,9 +19,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     this._logout,
     this._restore,
     this._verify,
+    this._loginPlaca,
   ) : super(const AuthUnknown()) {
     on<AuthIniciado>(_onIniciado);
     on<AuthLoginSolicitado>(_onLogin);
+    on<AuthLoginPlacaSolicitado>(_onLoginPlaca);
     on<AuthLogoutSolicitado>(_onLogout);
   }
 
@@ -28,6 +31,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final LogoutUseCase _logout;
   final RestoreSessionUseCase _restore;
   final VerifySessionUseCase _verify;
+  final LoginPorPlacaUseCase _loginPlaca;
 
   Future<void> _onIniciado(AuthIniciado event, Emitter<AuthState> emit) async {
     final cached = await _restore();
@@ -42,9 +46,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (vivo == null) emit(const AuthNoAutenticado(mensaje: 'Sesion expirada'));
   }
 
-  Future<void> _onLogin(AuthLoginSolicitado event, Emitter<AuthState> emit) async {
+  Future<void> _onLogin(AuthLoginSolicitado event, Emitter<AuthState> emit) =>
+      _entrar(() => _login(event.dni, event.password), emit);
+
+  Future<void> _onLoginPlaca(
+    AuthLoginPlacaSolicitado event,
+    Emitter<AuthState> emit,
+  ) =>
+      _entrar(() => _loginPlaca(event.placa, event.password), emit);
+
+  Future<void> _entrar(
+    Future<Result<Usuario>> Function() llamada,
+    Emitter<AuthState> emit,
+  ) async {
     emit(const AuthLoading());
-    final res = await _login(event.dni, event.password);
+    final res = await llamada();
     switch (res) {
       case Ok(:final value):
         emit(AuthAutenticado(value));

@@ -69,6 +69,7 @@ Future<void> configureDependencies() async {
 
   // --- usecases ---
   sl.registerFactory(() => LoginUseCase(sl<AuthRepository>()));
+  sl.registerFactory(() => LoginPorPlacaUseCase(sl<AuthRepository>()));
   sl.registerFactory(() => LogoutUseCase(sl<AuthRepository>()));
   sl.registerFactory(() => RestoreSessionUseCase(sl<AuthRepository>()));
   sl.registerFactory(() => VerifySessionUseCase(sl<AuthRepository>()));
@@ -84,6 +85,7 @@ Future<void> configureDependencies() async {
       sl<LogoutUseCase>(),
       sl<RestoreSessionUseCase>(),
       sl<VerifySessionUseCase>(),
+      sl<LoginPorPlacaUseCase>(),
     ),
   );
 

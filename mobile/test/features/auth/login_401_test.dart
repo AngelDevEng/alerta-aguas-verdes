@@ -77,6 +77,41 @@ void main() {
         'Credenciales incorrectas');
   });
 
+  test('login por placa con 401 da el mismo mensaje genérico', () async {
+    await servir(401, {...cuerpo401, 'ruta': '/api/v1/auth/login/patrullero'});
+    final ds = AuthRemoteDataSourceImpl(ApiClient(baseUrl: baseUrl));
+
+    final res =
+        await ds.loginPorPlaca(placa: 'EGA-999', password: 'incorrecta');
+
+    expect(res, isA<Err<AuthSessionDto>>());
+    expect((res as Err<AuthSessionDto>).failure, isA<AuthFailure>());
+    expect(res.failure.message, 'Credenciales incorrectas');
+  });
+
+  test('el login por placa exitoso reutiliza el mismo contrato', () async {
+    await servir(200, {
+      'success': true,
+      'accessToken': 'jwt-sereno',
+      'refreshToken': 'refresh-sereno',
+      'usuario': {
+        'id': 'uuid-3',
+        'dni': '00000003',
+        'nombreCompleto': 'Sereno Demo',
+        'rol': 'SERENO',
+      },
+      'unidadId': 'uuid-unidad-1',
+    });
+    final ds = AuthRemoteDataSourceImpl(ApiClient(baseUrl: baseUrl));
+
+    final res = await ds.loginPorPlaca(placa: 'EGA-999', password: 'clave');
+
+    expect(res, isA<Ok<AuthSessionDto>>());
+    final dto = (res as Ok<AuthSessionDto>).value;
+    expect(dto.accessToken, 'jwt-sereno');
+    expect(dto.usuario.rol, 'SERENO');
+  });
+
   test('parsear un cuerpo de error no lanza excepcion', () {
     // Si el guard de parseo se revirtiera, esto reventaria con TypeError.
     expect(() => AuthSessionDto.fromJson(cuerpo401), returnsNormally);

@@ -1,8 +1,10 @@
+import '../../../../core/error/result.dart';
 import '../../../../core/storage/token_store.dart';
 import '../../domain/entities/login_request.dart';
 import '../../domain/entities/usuario.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
+import '../models/auth_dto.dart';
 
 /// Fuente local de la sesion (keychain cifrado).
 ///
@@ -67,8 +69,15 @@ class AuthRepositoryImpl implements AuthRepository {
   final AuthLocalDataSource _local;
 
   @override
-  Future<AuthSession> login(LoginRequest request) async {
-    final res = await _remote.login(dni: request.dni, password: request.password);
+  Future<AuthSession> login(LoginRequest request) =>
+      _ingresar(() => _remote.login(dni: request.dni, password: request.password));
+
+  @override
+  Future<AuthSession> loginPorPlaca(LoginPlacaRequest request) =>
+      _ingresar(() => _remote.loginPorPlaca(placa: request.placa, password: request.password));
+
+  Future<AuthSession> _ingresar(Future<Result<AuthSessionDto>> Function() llamada) async {
+    final res = await llamada();
     final dto = res.valueOrThrow; // Err lanza Failure: el caso de uso la captura
     await _local.persist(
       AuthSessionDtoLike(
