@@ -4,6 +4,11 @@ import '../location/location_service.dart';
 import '../network/api_client.dart';
 import '../network/auth_interceptor.dart';
 import '../storage/token_store.dart';
+import '../../features/alertas/data/datasources/alerta_remote_datasource.dart';
+import '../../features/alertas/data/repositories/alerta_repository_impl.dart';
+import '../../features/alertas/domain/repositories/alerta_repository.dart';
+import '../../features/alertas/domain/usecases/alerta_usecases.dart';
+import '../../features/alertas/presentation/bloc/sos_bloc.dart';
 import '../../features/auth/data/datasources/auth_remote_datasource.dart';
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
@@ -177,6 +182,17 @@ Future<void> configureDependencies() async {
   sl.registerFactory(
     () => ListarUnidadesCercanasUseCase(sl<UnidadRepository>()),
   );
+
+  // --- alertas (SOS) ---
+  sl.registerLazySingleton<AlertaRemoteDataSource>(
+    () => AlertaRemoteDataSourceImpl(sl<ApiClient>()),
+  );
+  sl.registerLazySingleton<AlertaRepository>(
+    () => AlertaRepositoryImpl(sl<AlertaRemoteDataSource>()),
+  );
+  sl.registerFactory(() => EnviarSosUseCase(sl<AlertaRepository>()));
+  // Factory: cada apertura del home arranca sin el estado del envio anterior.
+  sl.registerFactory(() => SosBloc(sl<LocationService>(), sl<EnviarSosUseCase>()));
 
   // --- ubicacion ---
   // Sin estado: el permiso se resuelve en cada llamada, no se cachea para que

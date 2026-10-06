@@ -1,4 +1,8 @@
 import 'package:alerta_aguas_verdes/core/error/result.dart';
+import 'package:alerta_aguas_verdes/core/location/location_service.dart';
+import 'package:alerta_aguas_verdes/features/alertas/domain/repositories/alerta_repository.dart';
+import 'package:alerta_aguas_verdes/features/alertas/domain/usecases/alerta_usecases.dart';
+import 'package:alerta_aguas_verdes/features/alertas/presentation/bloc/sos_bloc.dart';
 import 'package:alerta_aguas_verdes/features/auth/domain/entities/login_request.dart';
 import 'package:alerta_aguas_verdes/features/auth/domain/entities/usuario.dart';
 import 'package:alerta_aguas_verdes/features/auth/domain/repositories/auth_repository.dart';
@@ -58,6 +62,35 @@ class _UnidadesFalsa implements UnidadRepository {
   Future<Result<List<Unidad>>> listarDespachables() async => Ok(unidades);
 }
 
+/// Doble del servicio de ubicacion para el flujo del SOS.
+class _LocationFake implements LocationService {
+  _LocationFake({this.posicion, this.falla});
+
+  final PosicionActual? posicion;
+  final Failure? falla;
+
+  @override
+  Future<Result<PosicionActual>> posicionActual() async =>
+      falla != null ? Err(falla!) : Ok(posicion!);
+}
+
+/// Doble del repositorio de alertas: cuenta toques y captura lo enviado.
+class _AlertasFalsa implements AlertaRepository {
+  int llamadas = 0;
+  double? latitudEnviada;
+
+  @override
+  Future<Result<String>> crearSos({
+    required double latitud,
+    required double longitud,
+    double? precisionM,
+  }) async {
+    llamadas++;
+    latitudEnviada = latitud;
+    return const Ok('alerta-1');
+  }
+}
+
 const _sereno = Usuario(
   id: 'u-sereno',
   dni: '00000003',
@@ -73,10 +106,16 @@ const _admin = Usuario(
 );
 
 /// Arma la pantalla con la sesion ya activa y las unidades dadas.
+///
+/// Los doubles del SOS son opcionales: si no se pasan, se usa un GPS y un
+/// backend sanos para que cualquier test que solo verifique el menu no tenga
+/// que pensar en el flujo.
 Future<void> _mostrar(
   WidgetTester tester, {
   required Usuario usuario,
   List<Unidad> unidades = const [],
+  LocationService? location,
+  AlertaRepository? alertas,
 }) async {
   final auth = _AuthFalso(usuario);
   GetIt.I.registerLazySingleton<AuthBloc>(
@@ -91,6 +130,18 @@ Future<void> _mostrar(
   GetIt.I.registerFactory<ListarUnidadesUseCase>(
     () => ListarUnidadesUseCase(_UnidadesFalsa(unidades)),
   );
+  final sos = SosBloc(
+    location ??
+        _LocationFake(
+          posicion: const PosicionActual(
+            latitud: -3.4825,
+            longitud: -80.245,
+            precisionMetros: 5,
+          ),
+        ),
+    EnviarSosUseCase(alertas ?? _AlertasFalsa()),
+  );
+  GetIt.I.registerFactory<SosBloc>(() => sos);
 
   await tester.pumpWidget(const MaterialApp(home: HomePage()));
   GetIt.I<AuthBloc>().add(const AuthIniciado());
@@ -148,15 +199,39 @@ void main() {
     expect(find.text('Panel Patrulla: EGA-123'), findsNothing);
   });
 
-  testWidgets('tocar SOS muestra el aviso de funcionalidad pendiente',
+  testWidgets('tocar SOS envia la alerta y confirma con el texto del legacy',
       (tester) async {
-    await _mostrar(tester, usuario: _admin);
+    final alertas = _AlertasFalsa();
+    await _mostrar(tester, usuario: _admin, alertas: alertas);
 
     await tester.tap(find.byKey(const Key('menu_sos')));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
+    expect(alertas.llamadas, 1);
+    expect(alertas.latitudEnviada, isNotNull);
+    expect(find.text('Auxilio enviado a central'), findsOneWidget);
+  });
+
+  testWidgets('si el GPS falla, el SOS avisa y no llega al backend',
+      (tester) async {
+    final alertas = _AlertasFalsa();
+    await _mostrar(
+      tester,
+      usuario: _admin,
+      alertas: alertas,
+      location: _LocationFake(
+        falla: const LocalFailure(
+          'El GPS esta apagado. Activalo para ubicar la incidencia.',
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('menu_sos')));
+    await tester.pumpAndSettle();
+
+    expect(alertas.llamadas, 0, reason: 'sin GPS no se gasta el POST');
     expect(
-      find.text('El SOS: funcionalidad en preparacion'),
+      find.text('El GPS esta apagado. Activalo para ubicar la incidencia.'),
       findsOneWidget,
     );
   });
