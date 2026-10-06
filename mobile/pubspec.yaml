@@ -68,3 +68,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    # Imagenes del menu principal: copiadas de los mipmap del legacy
+    # (AppSerenazgoseguro-legacy/res/mipmap-*/menu|inplaca|ubicacion|emergencia|alcalde.png)
+    - assets/images/
