@@ -4,6 +4,9 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../alertas/presentation/bloc/sos_bloc.dart';
+import '../../../alertas/presentation/bloc/sos_event.dart';
+import '../../../alertas/presentation/bloc/sos_state.dart';
 import '../../../auth/domain/entities/usuario.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
@@ -28,50 +31,71 @@ import '../../../unidades/domain/usecases/unidad_usecases.dart';
 /// legacy y se quitaron por decision del usuario (1:1 estricto). El panel CRUD
 /// del ADMIN (`MainActivity` legacy) es otra tarea.
 ///
-/// Acciones todavia no implementadas en Flutter (SOS, buscar placa, rastreo,
-/// mapa de calor) quedan visibles con el mismo look y muestran un aviso, para
-/// que la pantalla sea 1:1 aunque la funcion llegue despues (plan 4d.2-4d.7).
+/// Acciones todavia no implementadas en Flutter (buscar placa, rastreo, mapa
+/// de calor) quedan visibles con el mismo look y muestran un aviso, para que
+/// la pantalla sea 1:1 aunque la funcion llegue despues (rastreo 4d.4, mapa
+/// de calor 4d.7). El SOS si esta conectado: posicion + `POST /alertas` (4d.2).
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      bloc: GetIt.I<AuthBloc>(),
-      builder: (context, state) {
-        final usuario = state is AuthAutenticado ? state.usuario : null;
+    return BlocProvider<SosBloc>(
+      create: (_) => GetIt.I<SosBloc>(),
+      child: BlocListener<SosBloc, SosState>(
+        listenWhen: (previo, actual) =>
+            previo != actual && actual is! SosInicial,
+        listener: (context, state) {
+          final mensaje = switch (state) {
+            SosEnviando() => 'Enviando auxilio a central...',
+            SosEnviado() => 'Auxilio enviado a central',
+            SosError(:final mensaje) => mensaje,
+            _ => null,
+          };
+          if (mensaje == null) return;
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text(mensaje)));
+        },
+        child: BlocBuilder<AuthBloc, AuthState>(
+          bloc: GetIt.I<AuthBloc>(),
+          builder: (context, state) {
+            final usuario = state is AuthAutenticado ? state.usuario : null;
 
-        return Scaffold(
-          body: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.asset(
-                'assets/images/menu.png',
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-              ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    _Toolbar(usuario: usuario),
-                    Expanded(
-                      child: usuario == null
-                          ? const Center(child: CircularProgressIndicator())
-                          : LayoutBuilder(
-                              builder: (context, limites) => _MenuContenido(
-                                ancho: limites.maxWidth,
-                                alto: limites.maxHeight,
-                                usuario: usuario,
-                              ),
-                            ),
+            return Scaffold(
+              body: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/images/menu.png',
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                  ),
+                  SafeArea(
+                    child: Column(
+                      children: [
+                        _Toolbar(usuario: usuario),
+                        Expanded(
+                          child: usuario == null
+                              ? const Center(child: CircularProgressIndicator())
+                              : LayoutBuilder(
+                                  builder: (context, limites) =>
+                                      _MenuContenido(
+                                    ancho: limites.maxWidth,
+                                    alto: limites.maxHeight,
+                                    usuario: usuario,
+                                  ),
+                                ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -268,16 +292,25 @@ class _MenuContenido extends StatelessWidget {
             ),
           )
         else
-          Positioned(
-            left: _centrado(wSos),
-            top: _centro(0.544, _hSos),
-            child: _BotonGrafico(
-              key: const Key('menu_sos'),
-              asset: 'assets/images/ubicacion.png',
-              etiqueta: 'SOS ubicacion',
-              ancho: wSos,
-              alto: _hSos,
-              onTap: () => _pendiente(context, 'El SOS'),
+          BlocBuilder<SosBloc, SosState>(
+            buildWhen: (previo, actual) =>
+                (previo is SosEnviando) != (actual is SosEnviando),
+            builder: (context, sos) => Positioned(
+              left: _centrado(wSos),
+              top: _centro(0.544, _hSos),
+              child: _BotonGrafico(
+                key: const Key('menu_sos'),
+                asset: 'assets/images/ubicacion.png',
+                etiqueta: 'SOS ubicacion',
+                ancho: wSos,
+                alto: _hSos,
+                // Deshabilitado durante el envio: el SosBloc igualmente
+                // ignora un toque duplicado, pero sin esto el usuario no
+                // tendria forma de ver que algo esta pasando.
+                onTap: sos is SosEnviando
+                    ? null
+                    : () => context.read<SosBloc>().add(const SosSolicitado()),
+              ),
             ),
           ),
         if (!esSereno)
@@ -403,7 +436,10 @@ class _BotonGrafico extends StatelessWidget {
   final String etiqueta;
   final double ancho;
   final double alto;
-  final VoidCallback onTap;
+
+  /// `null` mientras el envio de SOS esta en curso: el boton conserva su
+  /// apariencia exacta y simplemente no responde al toque.
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

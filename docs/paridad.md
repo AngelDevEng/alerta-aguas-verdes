@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|
 | 1 | `InicioActivity` (login) | 3 accesos: Admin (usuario+password), Serenazgo (placa+DNI vía `login_patrullero.php`), Ciudadano (sin credenciales) | `login_page.dart` con selector DNI / Placa → `POST /auth/login` y `POST /auth/login/patrullero` | **Parcial** (ciudadano sin credenciales pendiente: el backend nuevo no expide token anónimo y `POST /incidencias` exige token) | `InicioActivity.kt:74-272`; `login_page.dart:74-103` |
 | 2 | `MainActivity` (panel ADMIN) | CRUD de unidades/serenazgos: alta, edición, baja, buscar por placa, asociaciones, foto, botón "Ver Monitoreo" | — (feature `unidades` sin `presentation/`) | **Falta** | `MainActivity.kt:138-144`; `mobile/lib/features/unidades/` solo data+domain |
-| 3 | `MenuActivity` (menú por rol) | SOS "Ubicación", Emergencia, Reportar Incidente, Mapa de Calor, Ingresar placa, Iniciar/Detener rastreo, Ver mapa | `home_page.dart` 1:1 con `activity_menu.xml` (mismo fondo `@mipmap/menu`, toolbar `#80000000`, botones gráficos en las mismas posiciones y visibilidad por rol: sereno = panel patrulla + rastreo; resto = SOS + Emergencia). Navega a Reportar/Emergencias/Mapa; SOS, placa, rastreo y mapa de calor muestran aviso de pendiente | **Parcial** (visual 1:1; acciones pendientes en 4d.2-4d.7; accesos extra de Flutter -Incidencias/Perfil- eliminados por decisión de 1:1 estricto) | `MenuActivity.kt:71-154`; `activity_menu.xml`; `home_page.dart` |
+| 3 | `MenuActivity` (menú por rol) | SOS "Ubicación", Emergencia, Reportar Incidente, Mapa de Calor, Ingresar placa, Iniciar/Detener rastreo, Ver mapa | `home_page.dart` 1:1 con `activity_menu.xml` (mismo fondo `@mipmap/menu`, toolbar `#80000000`, botones gráficos en las mismas posiciones y visibilidad por rol: sereno = panel patrulla + rastreo; resto = SOS + Emergencia). SOS conectado (4d.2): GPS + `POST /alertas`, aviso "Auxilio enviado a central" | **Parcial** (visual 1:1; tras el SOS el legacy abre `RastreoActivity` -pendiente 4d.4-; placa, rastreo y mapa de calor pendientes; accesos extra de Flutter -Incidencias/Perfil- eliminados por decisión de 1:1 estricto) | `MenuActivity.kt:71-154`; `activity_menu.xml`; `home_page.dart`; `sos_bloc.dart` |
 | 4 | `ReportarIncidenteActivity` | Formulario: tipo, urgencia, descripción, dirección, GPS, enviar | `reportar_incidencia_page.dart` (tipo desde catálogo, prioridad, GPS obligatorio, fotos con reintento, geocoding) | **Hecho** (supera al legacy) | `ReportarIncidenteActivity.kt:87-196`; `reportar_incidencia_page.dart:57-162` |
 | 5 | `BuscarPlacaActivity` | Consulta por placa: nombre, DNI, licencia, foto (bug: campos cruzados `:117`) | — | **Falta** (backend `GET /unidades?placa=` listo) | `BuscarPlacaActivity.kt:80-134`; `unidades.controller.ts` findAll |
 | 6 | `MapaCalorActivity` | Heatmap osmdroid con filtros de tipo y fechas | — | **Falta** (backend `GET /incidencias/zonas-calor` listo, 4a) | `MapaCalorActivity.kt:80-130`; `incidencias.controller.ts` zonasCalor |
@@ -38,7 +38,7 @@ La auditoría previa (`docs/auditoria-inicial.md:52-53`: 1 equivalente, 5 adapta
 | 8 | `rastrearPatrullero` (Flow 7 s) | `GET /unidades/:id/rastro` | ✅ | No |
 | 9 | `obtenerUbicacionPatrullero` | `GET /unidades/:id` (`ultima_ubicacion`) o `rastro?limit=1` | ✅ | No |
 | 10 | `actualizarUbicacionPatrullero` (código muerto en legacy) | `POST /unidades/:id/ubicaciones` | ✅ | No |
-| 11 | `crearAlertaConToken` (SOS) | `POST /alertas` | ✅ | **No (SOS no existe en Flutter)** |
+| 11 | `crearAlertaConToken` (SOS) | `POST /alertas` | ✅ | ✅ `sos_bloc.dart` (4d.2) |
 | 12 | `obtenerUltimaAlerta` | `GET /alertas/activas` | ✅ | No |
 | 13 | `atenderAlerta` | `PATCH /alertas/:id/estado` | ✅ | No |
 | 14 | `crearIncidente` | `POST /incidencias` | ✅ | ✅ `reportar_bloc.dart` |
@@ -50,11 +50,11 @@ La auditoría previa (`docs/auditoria-inicial.md:52-53`: 1 equivalente, 5 adapta
 | Capacidad | Backend | Flutter |
 |---|---|---|
 | Pantallas paridad total | — | 2 Hechas / 2 Parciales / 5 Faltas |
-| Métodos con endpoint nuevo | 15 de 16 (falta equivalente de `subirImagen`) | 2 consumidos de 16 |
-| SOS (`POST /alertas`) | ✅ | ❌ `features/alertas` no existe |
+| Métodos con endpoint nuevo | 15 de 16 (falta equivalente de `subirImagen`) | 3 consumidos de 16 |
+| SOS (`POST /alertas`) | ✅ | ✅ `features/alertas` (4d.2) |
 | Mapa (OSM) | ✅ (`geojson`, `rastro`, `cercanas`) | ❌ placeholder `app_router.dart:193` |
 | Rastreo 2.º plano | ✅ (ubicaciones) | ❌ sin plugin de background (solo `ACCESS_FINE_LOCATION`) |
-| Login por placa (4a) | ✅ `POST /auth/login/patrullero` | ❌ el login Flutter solo lee DNI+password |
+| Login por placa (4a) | ✅ `POST /auth/login/patrullero` | ✅ selector DNI/Placa en `login_page.dart` (4b.1) |
 
 **Conclusión:** el backend quedó en paridad tras el 4a; el hueco de paridad es la
 UI Flutter. Orden sugerido (plan 4d): SOS → mapa → rastreo → WebSocket → mapa de
