@@ -20,6 +20,15 @@ const CLIENTES = [
   { dni: '00000003', rol: 'SERENO', email: 'sereno@muniaguasverdes.gob.pe' },
 ];
 
+// Modo `--faciles`: contrasenas cortas y memorizables SOLO para desarrollo
+// local/demo. Sin el flag se generan aleatorias de 20 caracteres (default).
+const FACILES = process.argv.includes('--faciles');
+const CONTRASENAS_FACILES = {
+  '00000001': 'operador123',
+  '00000002': 'admin123',
+  '00000003': 'sereno123',
+};
+
 // Alfabeto sin caracteres ambiguos para evitar errores de transcripcion manual.
 const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%*-_';
 
@@ -39,11 +48,13 @@ function generarContrasena(longitud = 20) {
   const credenciales = [];
   for (const c of CLIENTES) {
     const { dni, rol, email } = c;
-    const password = generarContrasena();
+    const password = FACILES ? CONTRASENAS_FACILES[dni] : generarContrasena();
+    if (!password) throw new Error(`Sin contrasena facil definida para ${dni}`);
     const hash = bcrypt.hashSync(password, 12);
-    await cliente.query('UPDATE usuarios SET password_hash = $1 WHERE dni = $2', [hash, dni]);
+    const r = await cliente.query('UPDATE usuarios SET password_hash = $1 WHERE dni = $2', [hash, dni]);
+    if (r.rowCount === 0) console.warn(`[aviso] dni=${dni} no existe en usuarios: sin cambios`);
     credenciales.push({ dni, rol, email, password });
-    console.log(`[ok] ${dni} (${rol}) rotado`);
+    console.log(`[ok] ${dni} (${rol}) rotado${FACILES ? ' [modo --faciles]' : ''}`);
   }
 
   const revocados = await cliente.query(
@@ -60,6 +71,7 @@ function generarContrasena(longitud = 20) {
     [
       'CREDENCIALES OPERATIVAS - ARCHIVO LOCAL, NO SUBIR A GIT',
       `Generado: ${new Date().toISOString()}`,
+      ...(FACILES ? ['', '*** MODO --faciles: SOLO DESARROLLO LOCAL, rotar antes de produccion ***'] : []),
       '',
       ...credenciales.map((c) => `DNI ${c.dni} (${c.rol})\n  email: ${c.email}\n  password: ${c.password}\n`),
       'Si se pierde o se filtra: cambiar la contrasena con',
