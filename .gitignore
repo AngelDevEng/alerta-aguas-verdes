@@ -7,8 +7,14 @@ build/
 # ---- Entorno y secretos (regla: cero secretos en Git) ----
 .env*
 !.env.example
-google-services.json
+google-services.json*
 CREDENCIALES*.txt
+
+# Legacy Java: la modernización no lo versiona (decisión 2026-10-07); es solo
+# referencia local para la matriz de paridad. Ignorarlo completo también blinda
+# su servidor/ PHP con credenciales y la copia anidada AppSerenazgoseguro-android-app/
+# (regla de docs/plan.md: hosting/php NO entran a ningún repo).
+AppSerenazgoseguro-android-app-legacy/
 
 # ---- Android / claves de firma ----
 local.properties

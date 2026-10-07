@@ -4,6 +4,11 @@
 > Cliente móvil oficial: **Flutter (Android e iOS)**. La app Kotlin legacy NO se modifica:
 > es la especificación de referencia (diseño y funciones) y el respaldo, y vive en un
 > repo privado aparte. `hosting/` y `php/` del legacy no entran a ningún repo.
+>
+> **2026-10-07 — cambio de especificación de referencia:** la paridad 1:1 se mide ahora
+> contra la app **Java** de este repo (`AppSerenazgoseguro-android-app-legacy/`, sin trackear;
+> su `servidor/` con PHP y credenciales NO se committea). El legacy Kotlin quedó como respaldo
+> histórico. Ver `docs/paridad.md`.
 
 ## Estructura de repositorios
 
@@ -52,10 +57,11 @@ a) **Backend, endpoints a agregar:**
    - `GET` zonas de calor (contrato de `docs/MAPABASE.md`).
    - `GET` catálogo de tipos de incidencia.
 
-b) **Matriz de paridad**: cada pantalla/función Kotlin → equivalente Flutter →
-   estado (hecho/parcial/falta), con capturas lado a lado. Base: auditoría de los
-   15 métodos de `SerenazgoRepository` (1 equivalente, 5 adaptables, 9
-   rotos/inexistentes).
+b) **Matriz de paridad**: cada pantalla/función legacy → equivalente Flutter →
+   estado (hecho/parcial/falta), con capturas lado a lado. Base desde 2026-10-07:
+   la app Java (`14 activities + 3 servicios`, ver `docs/paridad.md`); la versión
+   anterior (auditoría de los 15 métodos de `SerenazgoRepository.kt` del legacy
+   Kotlin) quedó superada.
 
 c) **Tema idéntico**: auditar `mobile/lib/core/theme/app_theme.dart` contra los hex
    de los layouts del legacy (`res/layout/*.xml`; `colors.xml` solo tiene

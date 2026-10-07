@@ -8,11 +8,11 @@ import 'package:alerta_aguas_verdes/features/auth/domain/entities/usuario.dart';
 import 'package:alerta_aguas_verdes/features/auth/domain/repositories/auth_repository.dart';
 import 'package:alerta_aguas_verdes/features/auth/domain/usecases/auth_usecases.dart';
 import 'package:alerta_aguas_verdes/features/auth/presentation/bloc/auth_bloc.dart';
-import 'package:alerta_aguas_verdes/features/auth/presentation/bloc/auth_event.dart';
+import 'package:alerta_aguas_verdes/features/catalogos/domain/entities/catalogo.dart';
+import 'package:alerta_aguas_verdes/features/catalogos/domain/repositories/catalogo_repository.dart';
+import 'package:alerta_aguas_verdes/features/catalogos/domain/usecases/catalogo_usecases.dart';
+import 'package:alerta_aguas_verdes/features/catalogos/presentation/bloc/catalogos_bloc.dart';
 import 'package:alerta_aguas_verdes/features/home/presentation/pages/home_page.dart';
-import 'package:alerta_aguas_verdes/features/unidades/domain/entities/unidad.dart';
-import 'package:alerta_aguas_verdes/features/unidades/domain/repositories/unidad_repository.dart';
-import 'package:alerta_aguas_verdes/features/unidades/domain/usecases/unidad_usecases.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -41,25 +41,42 @@ class _AuthFalso implements AuthRepository {
   Future<void> logout(String? refreshToken) async {}
 }
 
-/// Doble del repositorio de unidades: solo `listar` importa en esta pantalla.
-class _UnidadesFalsa implements UnidadRepository {
-  _UnidadesFalsa(this.unidades);
+/// Doble del repositorio de catalogos: el home llama a la comisaria y al
+/// serenazgo con el telefono del catalogo cargado aqui.
+class _CatalogoFalso implements CatalogoRepository {
+  const _CatalogoFalso();
 
-  final List<Unidad> unidades;
+  static const _contactos = [
+    ContactoEmergencia(
+      id: 1,
+      nombre: 'Comisaría PNP',
+      telefono: '51957822184',
+      esWhatsapp: false,
+    ),
+    ContactoEmergencia(
+      id: 2,
+      nombre: 'Serenazgo',
+      telefono: '51967404172',
+      esWhatsapp: false,
+    ),
+    ContactoEmergencia(
+      id: 3,
+      nombre: 'WhatsApp Serenazgo',
+      telefono: '51967404172',
+      esWhatsapp: true,
+    ),
+  ];
 
   @override
-  Future<Result<List<Unidad>>> listar() async => Ok(unidades);
+  Future<Result<List<ContactoEmergencia>>> emergencias() async =>
+      const Ok(_contactos);
 
   @override
-  Future<Result<List<UnidadCercana>>> cercanas({
-    required double longitud,
-    required double latitud,
-    double radioM = UnidadRepository.radioPorDefectoM,
-  }) async =>
+  Future<Result<List<ContactoEmergencia>>> emergenciasWhatsapp() async =>
       const Ok([]);
 
   @override
-  Future<Result<List<Unidad>>> listarDespachables() async => Ok(unidades);
+  Future<Result<List<Asociacion>>> asociaciones() async => const Ok([]);
 }
 
 /// Doble del servicio de ubicacion para el flujo del SOS.
@@ -91,13 +108,6 @@ class _AlertasFalsa implements AlertaRepository {
   }
 }
 
-const _sereno = Usuario(
-  id: 'u-sereno',
-  dni: '00000003',
-  nombreCompleto: 'Sereno Prueba',
-  rol: 'SERENO',
-);
-
 const _admin = Usuario(
   id: 'u-admin',
   dni: '00000002',
@@ -105,19 +115,17 @@ const _admin = Usuario(
   rol: 'ADMIN',
 );
 
-/// Arma la pantalla con la sesion ya activa y las unidades dadas.
+/// Arma la pantalla con la sesion ya activa.
 ///
 /// Los doubles del SOS son opcionales: si no se pasan, se usa un GPS y un
 /// backend sanos para que cualquier test que solo verifique el menu no tenga
 /// que pensar en el flujo.
 Future<void> _mostrar(
   WidgetTester tester, {
-  required Usuario usuario,
-  List<Unidad> unidades = const [],
   LocationService? location,
   AlertaRepository? alertas,
 }) async {
-  final auth = _AuthFalso(usuario);
+  final auth = _AuthFalso(_admin);
   GetIt.I.registerLazySingleton<AuthBloc>(
     () => AuthBloc(
       LoginUseCase(auth),
@@ -127,8 +135,8 @@ Future<void> _mostrar(
       LoginPorPlacaUseCase(auth),
     ),
   );
-  GetIt.I.registerFactory<ListarUnidadesUseCase>(
-    () => ListarUnidadesUseCase(_UnidadesFalsa(unidades)),
+  GetIt.I.registerFactory<CatalogosBloc>(
+    () => CatalogosBloc(const ObtenerEmergenciasUseCase(_CatalogoFalso())),
   );
   final sos = SosBloc(
     location ??
@@ -144,7 +152,6 @@ Future<void> _mostrar(
   GetIt.I.registerFactory<SosBloc>(() => sos);
 
   await tester.pumpWidget(const MaterialApp(home: HomePage()));
-  GetIt.I<AuthBloc>().add(const AuthIniciado());
   await tester.pumpAndSettle();
 }
 
@@ -153,56 +160,52 @@ void main() {
     await GetIt.I.reset();
   });
 
-  testWidgets('rol distinto de sereno ve SOS y Emergencia, sin patrulla',
-      (tester) async {
-    await _mostrar(tester, usuario: _admin);
+  testWidgets('replica 1:1 el launcher del legacy (header, SOS, grilla 2x2 y '
+      'buscador)', (tester) async {
+    await _mostrar(tester);
 
-    expect(find.text('Menú Principal'), findsOneWidget);
+    // Header (activity_panico_main.xml:38-65).
+    expect(find.text('ALERTA'), findsOneWidget);
+    expect(find.text('AGUAS VERDES'), findsOneWidget);
+    expect(find.byKey(const Key('home_escudo')), findsOneWidget);
+
+    // SOS + tarjetas.
     expect(find.byKey(const Key('menu_sos')), findsOneWidget);
-    expect(find.byKey(const Key('menu_emergencia')), findsOneWidget);
-    expect(find.byKey(const Key('menu_reportar')), findsOneWidget);
-    expect(find.byKey(const Key('menu_mapa_calor')), findsOneWidget);
+    expect(find.byKey(const Key('menu_comisaria')), findsOneWidget);
+    expect(find.byKey(const Key('menu_serenazgo')), findsOneWidget);
+    expect(find.byKey(const Key('menu_incidencias')), findsOneWidget);
+    expect(find.byKey(const Key('menu_otras_emergencias')), findsOneWidget);
+    expect(find.text('POLICIA PNP'), findsOneWidget);
+    expect(find.text('SERENAZGO'), findsOneWidget);
+    expect(find.text('INCIDENTES'), findsOneWidget);
+    expect(find.text('EMERGENCIAS\nMÚLTIPLES'), findsOneWidget);
+
+    // Footer de busqueda (:268-313).
+    expect(find.text('Buscar:'), findsOneWidget);
+    expect(find.byKey(const Key('placa_input')), findsOneWidget);
+    expect(find.byKey(const Key('menu_buscar')), findsOneWidget);
+
+    // El menu del viejo legacy Kotlin ya no esta: 1:1 con este launcher.
+    expect(find.byKey(const Key('menu_reportar')), findsNothing);
+    expect(find.byKey(const Key('menu_mapa_calor')), findsNothing);
     expect(find.byKey(const Key('menu_placa')), findsNothing);
     expect(find.byKey(const Key('menu_rastreo')), findsNothing);
   });
 
-  testWidgets('sereno con unidad ve el panel de patrulla y rastreo',
+  testWidgets('el escudo ofrece cerrar la sesion (stand-in de admin())',
       (tester) async {
-    await _mostrar(
-      tester,
-      usuario: _sereno,
-      unidades: [
-        Unidad(
-          id: 'unidad-1',
-          codigo: 'SER-01',
-          tipo: TipoUnidad.patrulla,
-          estado: EstadoUnidad.disponible,
-          placa: 'EGA-123',
-          responsableId: _sereno.id,
-        ),
-      ],
-    );
+    await _mostrar(tester);
 
-    expect(find.text('Panel Patrulla: EGA-123'), findsOneWidget);
-    expect(find.byKey(const Key('menu_placa')), findsOneWidget);
-    expect(find.byKey(const Key('menu_rastreo')), findsOneWidget);
-    expect(find.byKey(const Key('menu_sos')), findsNothing);
-    expect(find.byKey(const Key('menu_emergencia')), findsNothing);
-    expect(find.byKey(const Key('menu_reportar')), findsOneWidget);
-  });
+    await tester.tap(find.byKey(const Key('home_escudo')));
+    await tester.pumpAndSettle();
 
-  testWidgets('sereno sin unidad asignada muestra "Panel Patrulla" sin placa',
-      (tester) async {
-    await _mostrar(tester, usuario: _sereno, unidades: const []);
-
-    expect(find.text('Panel Patrulla'), findsOneWidget);
-    expect(find.text('Panel Patrulla: EGA-123'), findsNothing);
+    expect(find.text('Cerrar sesion'), findsOneWidget);
   });
 
   testWidgets('tocar SOS envia la alerta y confirma con el texto del legacy',
       (tester) async {
     final alertas = _AlertasFalsa();
-    await _mostrar(tester, usuario: _admin, alertas: alertas);
+    await _mostrar(tester, alertas: alertas);
 
     await tester.tap(find.byKey(const Key('menu_sos')));
     await tester.pumpAndSettle();
@@ -217,7 +220,6 @@ void main() {
     final alertas = _AlertasFalsa();
     await _mostrar(
       tester,
-      usuario: _admin,
       alertas: alertas,
       location: _LocationFake(
         falla: const LocalFailure(

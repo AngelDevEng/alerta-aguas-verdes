@@ -43,9 +43,10 @@ class _Lista extends StatelessWidget {
     }
     return ListView.separated(
       padding: const EdgeInsets.all(12),
-      itemCount: emergencias.length,
+      itemCount: emergencias.length + 1,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
+        if (i == emergencias.length) return const _TarjetaMapaCalor();
         final c = emergencias[i];
         return ListTile(
           leading: CircleAvatar(
@@ -75,6 +76,34 @@ class _Lista extends StatelessWidget {
         ? Uri.parse('https://wa.me/${c.telefonoInternacional.replaceAll('+', '')}')
         : Uri.parse('tel:${c.telefonoInternacional}');
     launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+}
+
+/// Tarjeta final de la grilla legacy (`cardMapaCalor`): acceso al mapa de
+/// calor. La pantalla `Activity_Mapa_Calor` es la fila 5 de la matriz de
+/// paridad: todavia no existe, asi que el acceso se muestra y avisa (misma
+/// regla del home para funciones en preparacion).
+class _TarjetaMapaCalor extends StatelessWidget {
+  const _TarjetaMapaCalor();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: const Key('card_mapa_calor'),
+      leading: const CircleAvatar(
+        backgroundColor: Color(0xFFFF9800),
+        child: Icon(Icons.local_fire_department, color: Colors.white),
+      ),
+      title: const Text('Mapa de Calor'),
+      subtitle: const Text('Zonas de incidencia'),
+      onTap: () {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+            content: Text('El mapa de calor: funcionalidad en preparacion'),
+          ));
+      },
+    );
   }
 }
 
