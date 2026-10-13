@@ -22,10 +22,13 @@ Ejecutar la sección INSERT ... SELECT de `staging_template.sql` (convierte lat/
 `GEOGRAPHY(Point,4326)`, mapea tipos y estados).
 
 ## 5. Validar (evidencia para el informe)
+Ejecutar `99_conteos_origen_destino.sql`: devuelve, por flujo, conteo de origen
+(`legacy_*`) vs destino y la diferencia. Para el detalle por tabla:
 ```
-SELECT count(*) FROM legacy_incidencias;   -- origen
-SELECT count(*) FROM incidencias;          -- destino: deben coincidir
+SELECT count(*) FROM legacy_incidentes;   -- origen incidentes
+SELECT count(*) FROM incidencias;         -- destino (incluye 03_seed.sql)
 ```
 
 ## 6. Limpiar
-`DROP TABLE legacy_incidencias;` cuando esté validado.
+`DROP TABLE legacy_incidentes, legacy_serenazgo, legacy_central CASCADE;` cuando esté validado
+(la sección final de `staging_template.sql` lo deja comentado).
