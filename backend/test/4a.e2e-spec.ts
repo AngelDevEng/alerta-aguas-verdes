@@ -30,7 +30,7 @@ describe('Backend 4a (e2e)', () => {
   let tokenAdmin: string;
   let tokenSereno: string;
   let tokenDirectivo: string;
-  let createdIncidentIds: string[] = [];
+  const createdIncidentIds: string[] = [];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -64,6 +64,7 @@ describe('Backend 4a (e2e)', () => {
 
   afterAll(async () => {
     try {
+      await ds.query(`DELETE FROM alertas WHERE incidencia_id = ANY($1::uuid[])`, [createdIncidentIds]);
       await ds.query(`DELETE FROM incidencias WHERE id = ANY($1::uuid[])`, [createdIncidentIds]);
       await ds.query(`DELETE FROM refresh_tokens WHERE usuario_id = ANY($1::uuid[])`, [[adminId, serenoId, directivoId]]);
       await ds.query(`DELETE FROM unidades_serenazgo WHERE codigo IN ('EGA-999', 'EGA-998')`);
@@ -265,6 +266,83 @@ describe('Backend 4a (e2e)', () => {
       expect(celda.tipo_mas_comun).toContain('Robo');
       // Nunca filas individuales.
       expect(JSON.stringify(res.body)).not.toContain('"reportadoPor"');
+    });
+  });
+
+  describe('POST /auth/refresh', () => {
+    it('rota el refresh y rechaza el reuso (un solo uso)', async () => {
+      const ses = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ dni: ADMIN.dni, password: ADMIN.pass });
+      const rt = ses.body.refreshToken as string;
+
+      const first = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: rt });
+      expect(first.status).toBe(200);
+      expect(first.body.accessToken).toBeTruthy();
+      expect(first.body.refreshToken).not.toBe(rt);
+
+      // El refresh viejo ya fue rotado: reusarlo debe fallar.
+      const reuso = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: rt });
+      expect(reuso.status).toBe(401);
+    });
+  });
+
+  describe('POST /alertas (publico)', () => {
+    it('acepta un SOS sin token y abre una incidencia CRITICA', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/alertas')
+        .send({ latitud: -3.4825, longitud: -80.245 });
+      expect(res.status).toBe(201);
+      expect(res.body.incidenciaId).toBeTruthy();
+      createdIncidentIds.push(res.body.incidenciaId);
+    });
+
+    it('rechaza sin latitud/longitud (400)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/alertas')
+        .send({});
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /unidades/cercanas', () => {
+    it('devuelve unidades DISPONIBLES y ordenadas (Admin)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/unidades/cercanas?lat=-3.4830&lon=-80.2455&radio=2000')
+        .set('Authorization', `Bearer ${tokenAdmin}`);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      // SER-01 esta sembrada en 03_seed.sql junto a ese punto.
+      expect(res.body.some((u: any) => u.codigo === 'SER-01')).toBe(true);
+    });
+
+    it('exige token (401)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/unidades/cercanas?lat=-3.4830&lon=-80.2455&radio=2000');
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('rutas protegidas por rol (403)', () => {
+    it('SERENO no puede crear unidades (solo ADMIN)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/unidades')
+        .set('Authorization', `Bearer ${tokenSereno}`)
+        .send({ codigo: 'EGA-403', tipo: 'PATRULLA' });
+      expect(res.status).toBe(403);
+    });
+
+    it('DIRECTIVO no puede cambiar el estado de una alerta (403)', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/api/v1/alertas/00000000-0000-0000-0000-000000000000/estado')
+        .set('Authorization', `Bearer ${tokenDirectivo}`)
+        .send({ estado: 'ATENDIDA' });
+      // DIRECTIVO no esta en @Roles de PATCH /alertas/:id/estado -> 403
+      expect(res.status).toBe(403);
     });
   });
 

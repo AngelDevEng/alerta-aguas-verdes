@@ -1,7 +1,6 @@
 import {
   HttpException, HttpStatus, Injectable, Logger, UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';

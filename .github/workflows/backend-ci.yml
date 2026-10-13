@@ -1,0 +1,68 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: alerta_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/alerta_test
+      DB_SSL: 'false'
+      JWT_SECRET: ci-secret-no-usar-en-produccion
+      JWT_EXPIRES_IN: 15m
+      CORS_ORIGIN: '*'
+      # Dummies: EvidenciasService exige estas vars al instanciarse, pero el e2e
+      # no sube archivos. createClient no se conecta hasta que se usa.
+      SUPABASE_URL: https://example.supabase.co
+      SUPABASE_SERVICE_KEY: ci-dummy-service-key
+      SUPABASE_BUCKET: evidencias
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar (tsc via nest build)
+        run: npm run build
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Cargar esquema y seed en PostGIS
+        run: |
+          node -e "const fs=require('fs');const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();for(const f of ['01_schema.sql','02_indices_triggers.sql','03_seed.sql','04_auth_alertas.sql','05_catalogos_app.sql','06_baja_logica_unidades.sql']){process.stdout.write('aplicando '+f+'\n');await c.query(fs.readFileSync('../database/'+f,'utf8'));}await c.end();console.log('esquema cargado');})().catch(e=>{console.error(e);process.exit(1);});"
+
+      - name: Pruebas e2e
+        run: npm run test:e2e
