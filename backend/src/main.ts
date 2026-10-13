@@ -7,6 +7,9 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  // Render envia SIGTERM al redeployar esta instancia: cerrar el pool de
+  // TypeORM y las peticiones en curso en vez de abortarlas.
+  app.enableShutdownHooks();
   app.use(helmet());
 
   // '*' solo es aceptable mientras no exista el frontend. En produccion se fija

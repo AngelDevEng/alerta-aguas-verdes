@@ -36,7 +36,7 @@ export class AuthService {
 
     const coincide = bcrypt.compareSync(dto.password, u.password_hash);
     if (!coincide) {
-      this.logger.warn(`Login fallido para dni=${dto.dni}`);
+      this.logger.warn('Login fallido: credenciales invalidas');
       throw new UnauthorizedException('Credenciales invalidas');
     }
     if (!u.activo) throw new UnauthorizedException('Usuario desactivado');
