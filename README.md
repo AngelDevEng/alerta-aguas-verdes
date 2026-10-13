@@ -58,6 +58,7 @@ Subir a GitHub y crear un "Blueprint" en Render con `render.yaml`; cargar las va
 Probar: `https://<tu-servicio>.onrender.com/api/v1/health`
 
 ## Aviso de seguridad
-Las credenciales de MySQL que aparecen en claro dentro de `AppSerenazgoseguro-legacy/`
-(`WsLs9cnQ2a`, `XnfgZ%MfNO%`), su `AUTH_SECRET` y la base de datos en produccion deben
-rotarse: al estar en el historial de git, no basta con borrarlas del codigo.
+Aviso de rotacion: las credenciales de MySQL de produccion (usuario y clave) y el
+`AUTH_SECRET` del legacy deben rotarse; al haber estado en el historial de git, no
+basta con borrarlas del codigo. Este aviso no reproduce ningun valor. Ver la lista
+de rotacion en `docs/evidencia_sprint4.md`.

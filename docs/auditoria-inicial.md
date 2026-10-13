@@ -31,7 +31,7 @@ tests, hallazgos del historial remoto).
    está en ningún repo: ver estructura en `docs/plan.md`.)
 2. **PII real y credenciales en el legacy**: dump `serenazgo.sql` (4 personas con
    nombre/DNI/placa/foto + 4 hashes bcrypt), credenciales MySQL en `conexion.php`,
-   `AUTH_SECRET` en `auth_token.php`, login en claro en `php/test_endpoints.sh:15`,
+   un secreto de firma (variable de entorno) en `auth_token.php`, login en claro en `php/test_endpoints.sh:15`,
    `error_log` de 3,7 MB con rutas del servidor de producción. Todo ello quedó
    **fuera de cualquier repo** en el paso 0.
 3. **Historial remoto**: el seed viejo (commits `4bca956`/`88fd138`) contenía una
