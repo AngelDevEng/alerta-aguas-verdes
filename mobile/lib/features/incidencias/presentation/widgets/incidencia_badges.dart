@@ -45,16 +45,7 @@ class PrioridadBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final legacy = context.legacy;
-    final scheme = Theme.of(context).colorScheme;
-
-    final color = switch (prioridad) {
-      Prioridad.critica => legacy.rojo,
-      Prioridad.alta => legacy.naranja,
-      Prioridad.media => legacy.azul,
-      Prioridad.baja => legacy.gris,
-      Prioridad.unknown => scheme.outline,
-    };
+    final color = colorDePrioridad(context, prioridad);
 
     return _Pastilla(
       color: color,
@@ -63,6 +54,27 @@ class PrioridadBadge extends StatelessWidget {
       esContorno: true,
     );
   }
+}
+
+/// Color de operacion de una prioridad.
+///
+/// Compartido entre las pastillas de la lista y los marcadores del mapa: la
+/// misma prioridad tiene que ser el mismo color en las dos pantallas, y con
+/// dos copias del `switch` tarde o temprano divergen.
+///
+/// El color sale de [ColoresLegacy] y no del color scheme: es codigo de
+/// operacion y no puede cambiar de significado entre tema claro y oscuro.
+Color colorDePrioridad(BuildContext context, Prioridad prioridad) {
+  final legacy = context.legacy;
+  final scheme = Theme.of(context).colorScheme;
+
+  return switch (prioridad) {
+    Prioridad.critica => legacy.rojo,
+    Prioridad.alta => legacy.naranja,
+    Prioridad.media => legacy.azul,
+    Prioridad.baja => legacy.gris,
+    Prioridad.unknown => scheme.outline,
+  };
 }
 
 class _Pastilla extends StatelessWidget {

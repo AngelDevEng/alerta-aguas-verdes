@@ -2,6 +2,7 @@ import '../../../../core/error/result.dart';
 import '../../domain/entities/detalle_incidencia.dart';
 import '../../domain/entities/evidencia.dart';
 import '../../domain/entities/incidencia.dart';
+import '../../domain/entities/incidencia_mapa.dart';
 import '../../domain/entities/tipo_incidencia.dart';
 import '../../domain/repositories/incidencia_repository.dart';
 import '../datasources/incidencia_remote_datasource.dart';
@@ -14,6 +15,9 @@ class IncidenciaRepositoryImpl implements IncidenciaRepository {
   @override
   Future<Result<PaginaIncidencias>> listar(FiltrosIncidencia filtros) =>
       _remote.listar(filtros);
+
+  @override
+  Future<Result<List<IncidenciaMapa>>> geojson() => _remote.geojson();
 
   @override
   Future<Result<DetalleIncidencia>> obtenerDetalle(String id) =>

@@ -2,6 +2,7 @@ import '../../../../core/error/result.dart';
 import '../../domain/entities/detalle_incidencia.dart';
 import '../../domain/entities/evidencia.dart';
 import '../../domain/entities/incidencia.dart';
+import '../../domain/entities/incidencia_mapa.dart';
 import '../../domain/entities/tipo_incidencia.dart';
 import '../../domain/repositories/incidencia_repository.dart';
 
@@ -78,4 +79,17 @@ class AsignarUnidadUseCase {
 
   Future<Result<DetalleIncidencia>> call(String id, String unidadId) =>
       _repo.asignarUnidad(id, unidadId);
+}
+
+/// Puntos de incidencias para pintar en el mapa (`GET /incidencias/geojson`).
+///
+/// No pagina ni filtra como [ListarIncidenciasUseCase]: el mapa quiere todo lo
+/// que el servidor devuelve (corte en 1000 filas) de una sola vez, y los
+/// campos son los del geojson, no los de la lista.
+class ObtenerIncidenciasMapaUseCase {
+  const ObtenerIncidenciasMapaUseCase(this._repo);
+
+  final IncidenciaRepository _repo;
+
+  Future<Result<List<IncidenciaMapa>>> call() => _repo.geojson();
 }
