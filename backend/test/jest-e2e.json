@@ -1,8 +1,1 @@
-{
-  "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": "..",
-  "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
-  "transform": { "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "<rootDir>/tsconfig.json" }] },
-  "testTimeout": 60000
-}
+{"moduleFileExtensions":["js","json","ts"],"rootDir":"..","testEnvironment":"node","testRegex":".e2e-spec.ts$","globalSetup":"<rootDir>/test/setup/guard-supabase.js","transform":{"^.+\\.(t|j)s$":["ts-jest",{"tsconfig":"<rootDir>/tsconfig.json"}]},"testTimeout":60000}
