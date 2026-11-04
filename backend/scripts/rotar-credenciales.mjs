@@ -23,6 +23,10 @@ const CLIENTES = [
 // Modo `--faciles`: contrasenas cortas y memorizables SOLO para desarrollo
 // local/demo. Sin el flag se generan aleatorias de 20 caracteres (default).
 const FACILES = process.argv.includes('--faciles');
+if (FACILES && /supabase/i.test(process.env.DATABASE_URL || '')) {
+  console.error('[error] --faciles no puede ejecutarse contra Supabase/produccion.');
+  process.exit(1);
+}
 const CONTRASENAS_FACILES = {
   '00000001': 'operador123',
   '00000002': 'admin123',
