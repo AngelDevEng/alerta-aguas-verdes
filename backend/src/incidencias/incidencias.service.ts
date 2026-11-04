@@ -166,6 +166,35 @@ export class IncidenciasService {
         ORDER BY peso DESC
         LIMIT 500`,
       params,
+  async estadisticas(q: any) {
+    const params: any[] = [];
+    let w = 'TRUE';
+    if (q.desde) { params.push(q.desde); w += ` AND i.ocurrido_en >= $${params.length}`; }
+    if (q.hasta) { params.push(q.hasta); w += ` AND i.ocurrido_en <= $${params.length}`; }
+    if (q.tipo) { params.push(q.tipo.toLowerCase()); w += ` AND (lower(t.nombre) = $${params.length} OR lower(t.codigo) = $${params.length})`; }
+    if (q.zona) { params.push(q.zona); w += ` AND i.zona = $${params.length}`; }
+
+    const porTipo = await this.ds.query(
+      `SELECT t.codigo, t.nombre, count(*)::int AS total
+         FROM incidencias i JOIN tipos_incidencia t ON t.id = i.tipo_id
+        WHERE ${w}
+        GROUP BY t.codigo, t.nombre ORDER BY total DESC`,
+      params,
     );
+    const total = await this.ds.query(
+      `SELECT count(*)::int AS total, avg(EXTRACT(EPOCH FROM (i.actualizado_en - i.ocurrido_en)))::float AS tiempo_promedio_seg
+         FROM incidencias i JOIN tipos_incidencia t ON t.id = i.tipo_id
+        WHERE ${w}`,
+      params,
+    );
+    const unidadesActivas = await this.ds.query(
+      `SELECT count(*)::int AS total FROM unidades_serenazgo WHERE estado = 'DISPONIBLE' AND eliminado_en IS NULL`,
+    );
+    return {
+      porTipo,
+      total: total[0]?.total ?? 0,
+      tiempoPromedioSeg: total[0]?.tiempo_promedio_seg ?? null,
+      unidadesActivas: unidadesActivas[0]?.total ?? 0,
+    };
   }
 }
