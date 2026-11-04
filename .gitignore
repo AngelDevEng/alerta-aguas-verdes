@@ -8,6 +8,8 @@ build/
 .env*
 !.env.example
 google-services.json*
+firebase-*.json
+*.credentials*
 CREDENCIALES*.txt
 
 # Legacy Java: la modernización no lo versiona (decisión 2026-10-07); es solo
