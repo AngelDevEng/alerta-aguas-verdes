@@ -11,6 +11,7 @@ import { UnidadesModule } from './unidades/unidades.module';
 import { EvidenciasModule } from './evidencias/evidencias.module';
 import { AlertasModule } from './alertas/alertas.module';
 import { CatalogosModule } from './catalogos/catalogos.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { CatalogosModule } from './catalogos/catalogos.module';
     EvidenciasModule,
     AlertasModule,
     CatalogosModule,
+    RealtimeModule,
   ],
   controllers: [HealthController],
   providers: [

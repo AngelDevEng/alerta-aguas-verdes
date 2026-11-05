@@ -1,0 +1,38 @@
+name: Latencia WS
+on:
+  workflow_dispatch:
+jobs:
+  latencia:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Login
+        env:
+          WS_URL: ${{ vars.WS_URL }}
+          SERENO_DNI: ${{ secrets.SERENO_DNI }}
+          SERENO_PASSWORD: ${{ secrets.SERENO_PASSWORD }}
+          OPERADOR_DNI: ${{ secrets.OPERADOR_DNI }}
+          OPERADOR_PASSWORD: ${{ secrets.OPERADOR_PASSWORD }}
+        run: |
+          HTTP_URL="${WS_URL%/ws}"
+          ST=$(curl -s -X POST "$HTTP_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d "{\"dni\":\"$SERENO_DNI\",\"password\":\"$SERENO_PASSWORD\"}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+          OT=$(curl -s -X POST "$HTTP_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d "{\"dni\":\"$OPERADOR_DNI\",\"password\":\"$OPERADOR_PASSWORD\"}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+          echo "::add-mask::$ST"; echo "::add-mask::$OT"
+          echo "SERENO_TOKEN=$ST" >> $GITHUB_ENV
+          echo "OPERADOR_TOKEN=$OT" >> $GITHUB_ENV
+      - name: Ejecutar script
+        env:
+          WS_URL: ${{ vars.WS_URL }}
+          UNIDAD_ID: ${{ vars.UNIDAD_ID }}
+          N: '100'
+        run: |
+          cd backend
+          node scripts/medir-latencia-ws.mjs | tee /tmp/out.txt
+          echo "## Latencia" >> $GITHUB_STEP_SUMMARY
+          cat /tmp/out.txt >> $GITHUB_STEP_SUMMARY
+      - name: Nota
+        run: |
+          echo "Limitacion: medicion desde servidores de GitHub, no desde Tumbes. Cold start medir con --cold por separado." >> $GITHUB_STEP_SUMMARY

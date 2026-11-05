@@ -1,0 +1,4 @@
+# Variables de entorno (sin valores)
+
+PORT, CORS_ORIGIN, JWT_SECRET, JWT_EXPIRES_IN, DATABASE_URL, DB_SSL, SUPABASE_URL, SUPABASE_SERVICE_KEY, SUPABASE_BUCKET.
+Ver backend/.env.example.

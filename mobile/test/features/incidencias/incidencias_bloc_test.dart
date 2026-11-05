@@ -5,6 +5,7 @@ import 'package:alerta_aguas_verdes/core/error/result.dart';
 import 'package:alerta_aguas_verdes/features/incidencias/domain/entities/detalle_incidencia.dart';
 import 'package:alerta_aguas_verdes/features/incidencias/domain/entities/evidencia.dart';
 import 'package:alerta_aguas_verdes/features/incidencias/domain/entities/incidencia.dart';
+import 'package:alerta_aguas_verdes/features/incidencias/domain/entities/incidencia_mapa.dart';
 import 'package:alerta_aguas_verdes/features/incidencias/domain/entities/tipo_incidencia.dart';
 import 'package:alerta_aguas_verdes/features/incidencias/domain/repositories/incidencia_repository.dart';
 import 'package:alerta_aguas_verdes/features/incidencias/domain/usecases/incidencia_usecases.dart';
@@ -62,6 +63,11 @@ class FakeListaRepository implements IncidenciaRepository {
     llamadas++;
     return cola.isEmpty ? Future.value(porDefecto) : cola.removeAt(0).future;
   }
+
+  // Solo lo usa el mapa (`MapaBloc`), que este test no toca.
+  @override
+  Future<Result<List<IncidenciaMapa>>> geojson() =>
+      throw UnimplementedError('geojson() no se usa en este test');
 
   @override
   List<TipoIncidenciaDisponible> tiposDisponibles(

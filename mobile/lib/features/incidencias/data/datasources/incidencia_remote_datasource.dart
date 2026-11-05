@@ -5,8 +5,10 @@ import '../../../../core/network/api_client.dart';
 import '../../domain/entities/detalle_incidencia.dart';
 import '../../domain/entities/evidencia.dart';
 import '../../domain/entities/incidencia.dart';
+import '../../domain/entities/incidencia_mapa.dart';
 import '../../domain/entities/tipo_incidencia.dart';
 import '../models/detalle_incidencia_dto.dart';
+import '../models/incidencia_mapa_dto.dart';
 import '../models/incidencias_dto.dart';
 
 /// Fuente remota de incidencias.
@@ -16,6 +18,8 @@ import '../models/incidencias_dto.dart';
 /// - `GET /incidencias`, `GET /incidencias/:id` exigen
 ///   `SERENO|OPERADOR|ADMIN|DIRECTIVO`. Un ciudadano NO puede ver la lista ni el
 ///   detalle, pero si puede reportar.
+/// - `GET /incidencias/geojson` exige `SERENO|OPERADOR|ADMIN|DIRECTIVO`,
+///   igual que la lista: el mapa es una vista del mismo listado.
 /// - `POST /incidencias/:id/evidencias` exige `SERENO|OPERADOR|ADMIN`, asi que
 ///   un ciudadano que adjunta fotos recibe 403 y hay que tratarlo aparte del
 ///   alta: el reporte ya quedo guardado y no se debe perder por una foto.
@@ -28,6 +32,9 @@ import '../models/incidencias_dto.dart';
 /// `puedeDespachar` en la UI habria que rivalizar con esta tabla.
 abstract interface class IncidenciaRemoteDataSource {
   Future<Result<PaginaIncidencias>> listar(FiltrosIncidencia filtros);
+
+  /// Puntos para el mapa: una `FeatureCollection`, sin paginar ni filtrar.
+  Future<Result<List<IncidenciaMapa>>> geojson();
 
   Future<Result<DetalleIncidencia>> obtenerDetalle(String id);
 
@@ -65,6 +72,13 @@ class IncidenciaRemoteDataSourceImpl implements IncidenciaRemoteDataSource {
         // conocer la forma del JSON.
         parse: (data) =>
             PaginaIncidenciasDto.fromJson(_mapa(data)).toEntity(),
+      );
+
+  @override
+  Future<Result<List<IncidenciaMapa>>> geojson() =>
+      _api.get<List<IncidenciaMapa>>(
+        '/incidencias/geojson',
+        parse: IncidenciaMapaDto.deFeatureCollection,
       );
 
   @override

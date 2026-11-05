@@ -5,7 +5,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.13.5
+  sdk: ^3.10.3
 
 dependencies:
   flutter:
@@ -41,8 +41,8 @@ dependencies:
   # Inyeccion de dependencias
   get_it: ^8.0.3
 
-  # Modelos inmutables + JSON
-  freezed_annotation: ^3.1.0
+  # Tiempo real
+  socket_io_client: ^3.0.2
   json_annotation: ^4.9.0
 
   # Cache local del mapa (offline)

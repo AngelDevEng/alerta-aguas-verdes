@@ -4,6 +4,7 @@ import { IncidenciasService } from './incidencias.service';
 import { CreateIncidenciaDto } from './dto/create-incidencia.dto';
 import { QueryIncidenciaDto } from './dto/query-incidencia.dto';
 import { ZonasCalorQueryDto } from './dto/zonas-calor-query.dto';
+import { EstadisticasQueryDto } from './dto/estadisticas-query.dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 import { AsignarUnidadDto } from './dto/asignar-unidad.dto';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -32,6 +33,9 @@ export class IncidenciasController {
   // La ruta va antes de ':id' para que 'zonas-calor' no se enrute por ahi.
   @Roles('ADMIN', 'OPERADOR', 'DIRECTIVO')
   @Get('zonas-calor') zonasCalor(@Query() q: ZonasCalorQueryDto) { return this.svc.zonasCalor(q); }
+
+  @Roles('ADMIN', 'OPERADOR', 'DIRECTIVO')
+  @Get('estadisticas') estadisticas(@Query() q: EstadisticasQueryDto) { return this.svc.estadisticas(q); }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get(':id') findOne(@Param('id', ParseUUIDPipe) id: string) { return this.svc.findOne(id); }
