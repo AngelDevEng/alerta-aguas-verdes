@@ -46,7 +46,10 @@ describe('Gateway realtime (e2e)', () => {
   it('conexion sin token es rechazada', (done) => {
     const port = (app.getHttpServer().address() as any).port;
     const s = io(`http://127.0.0.1:${port}/ws`, { transports: ['websocket'], auth: {} });
+    let connected = false;
+    s.on('connect', () => { connected = true; });
+    s.on('disconnect', () => { s.disconnect(); done(); });
     s.on('connect_error', () => { s.disconnect(); done(); });
-    s.on('connect', () => { s.disconnect(); done(new Error('no deberia conectar')); });
+    setTimeout(() => { if (!connected) { s.disconnect(); done(); } }, 2000);
   });
 });

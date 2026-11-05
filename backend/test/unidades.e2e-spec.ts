@@ -50,7 +50,7 @@ describe('Unidades (e2e)', () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/unidades')
       .set('Authorization', `Bearer ${tokenAdmin}`)
-      .send({ codigo: 'TEST-U-E2E', tipo: 'MOTO', placa: 'TST-001' })
+      .send({ codigo: 'TEST-U-E2E', tipo: 'MOTOCICLETA', placa: 'TST-001' })
       .expect(201);
     unidadId = res.body.id;
   });
