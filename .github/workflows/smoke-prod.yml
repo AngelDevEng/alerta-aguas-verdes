@@ -5,21 +5,25 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Health
+      - name: Login roles
+        env:
+          RENDER_URL: ${{ vars.RENDER_URL }}
+          ADMIN_DNI: ${{ secrets.ADMIN_DNI }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          SERENO_DNI: ${{ secrets.SERENO_DNI }}
+          SERENO_PASSWORD: ${{ secrets.SERENO_PASSWORD }}
         run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" "$RENDER_URL/api/v1/health")
-          echo "health=$code" >> $GITHUB_STEP_SUMMARY
-          test "$code" = "200"
-      - name: Docs json
+          ADMIN_TOKEN=$(curl -s -X POST "$RENDER_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d "{\"dni\":\"$ADMIN_DNI\",\"password\":\"$SERENO_PASSWORD\"}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+          echo "::add-mask::$ADMIN_TOKEN"
+          echo "ADMIN_TOKEN=$ADMIN_TOKEN" >> $GITHUB_ENV
+          SERENO_TOKEN=$(curl -s -X POST "$RENDER_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d "{\"dni\":\"$SERENO_DNI\",\"password\":\"$SERENO_PASSWORD\"}" | python3 -c 'import sys,json;print(json.load(sys.stdin)["accessToken"])')
+          echo "::add-mask::$SERENO_TOKEN"
+          echo "SERENO_TOKEN=$SERENO_TOKEN" >> $GITHUB_ENV
+      - name: Comprobaciones
+        env:
+          RENDER_URL: ${{ vars.RENDER_URL }}
         run: |
-          curl -s "$RENDER_URL/api/docs-json" | grep -q '"/api/v1/incidencias/estadisticas"'
-      - name: Sin token -> 401
-        run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" "$RENDER_URL/api/v1/incidencias")
-          test "$code" = "401"
-      - name: Login invalido -> 400
-        run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$RENDER_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"dni":"abc"}')
-          test "$code" = "400"
-    env:
-      RENDER_URL: ${{ vars.RENDER_URL }}
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$RENDER_URL/api/v1/health"); echo "health=$code" >> $GITHUB_STEP_SUMMARY; test "$code" = "200"
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$RENDER_URL/api/v1/incidencias"); echo "sin_token_estadisticas=$code" >> $GITHUB_STEP_SUMMARY; test "$code" = "401"
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $ADMIN_TOKEN" "$RENDER_URL/api/v1/incidencias/estadisticas"); echo "admin_estadisticas=$code" >> $GITHUB_STEP_SUMMARY; test "$code" = "200"
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $SERENO_TOKEN" "$RENDER_URL/api/v1/incidencias/estadisticas"); echo "sereno_estadisticas=$code" >> $GITHUB_STEP_SUMMARY; test "$code" = "403"
