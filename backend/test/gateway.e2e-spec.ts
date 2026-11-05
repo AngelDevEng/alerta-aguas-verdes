@@ -13,13 +13,6 @@ describe('Gateway realtime (e2e)', () => {
   const ADMIN = { dni: '99999990', rol: 'ADMIN', pass: 'e2e-gw-1' };
   const SERENO = { dni: '99999989', rol: 'SERENO', pass: 'e2e-gw-2' };
 
-  function login(dni: string, pass: string): Promise<string> {
-    return new Promise((resolve) => {
-      // placeholder: tests assume token passed via env in real runs
-      resolve('');
-    });
-  }
-
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
