@@ -38,12 +38,7 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
-    }
-}
-
+// Java/Kotlin target 17 configurado en compileOptions (equivalente al bloque kotlin{}).
 flutter {
     source = "../.."
 }

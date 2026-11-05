@@ -5,6 +5,7 @@ on:
     branches: [main, 'sprint-*']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   backend:
@@ -66,3 +67,9 @@ jobs:
 
       - name: Pruebas e2e
         run: npm run test:e2e
+
+      - name: Resumen
+        if: always()
+        run: |
+          echo "## Backend CI" >> $GITHUB_STEP_SUMMARY
+          echo "- Build/lint/e2e ejecutados" >> $GITHUB_STEP_SUMMARY
