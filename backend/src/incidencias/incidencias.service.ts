@@ -166,6 +166,9 @@ export class IncidenciasService {
         ORDER BY peso DESC
         LIMIT 500`,
       params,
+    );
+  }
+
   async estadisticas(q: any) {
     const params: any[] = [];
     let w = 'TRUE';

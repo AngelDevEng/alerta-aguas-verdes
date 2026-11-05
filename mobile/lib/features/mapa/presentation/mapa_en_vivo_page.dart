@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../../core/realtime/socket_service.dart';
+import '../../../core/realtime/socket_service.dart';
 
 class MapaEnVivoPage extends StatefulWidget {
   const MapaEnVivoPage({super.key, required this.socketService});
