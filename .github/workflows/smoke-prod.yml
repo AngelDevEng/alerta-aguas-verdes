@@ -1,0 +1,25 @@
+name: Smoke prod
+on:
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$RENDER_URL/api/v1/health")
+          echo "health=$code" >> $GITHUB_STEP_SUMMARY
+          test "$code" = "200"
+      - name: Docs json
+        run: |
+          curl -s "$RENDER_URL/api/docs-json" | grep -q '"/api/v1/incidencias/estadisticas"'
+      - name: Sin token -> 401
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$RENDER_URL/api/v1/incidencias")
+          test "$code" = "401"
+      - name: Login invalido -> 400
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$RENDER_URL/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"dni":"abc"}')
+          test "$code" = "400"
+    env:
+      RENDER_URL: ${{ vars.RENDER_URL }}

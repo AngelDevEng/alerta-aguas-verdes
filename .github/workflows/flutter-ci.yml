@@ -3,6 +3,7 @@ on:
   pull_request:
   push:
     branches: [main, 'sprint-*']
+  workflow_dispatch:
 jobs:
   flutter:
     runs-on: ubuntu-latest
@@ -17,3 +18,9 @@ jobs:
         working-directory: mobile
       - run: flutter test
         working-directory: mobile
+      - run: flutter build apk --debug
+        working-directory: mobile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: mobile/build/app/outputs/flutter-apk/app-debug.apk
