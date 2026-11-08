@@ -23,6 +23,7 @@ import '../../features/incidencias/presentation/pages/reportar_incidencia_page.d
 import '../../features/mapa/presentation/bloc/mapa_bloc.dart';
 import '../../features/mapa/presentation/bloc/mapa_event.dart';
 import '../../features/mapa/presentation/pages/mapa_page.dart';
+import '../../features/patrullero/presentation/patrullero_dashboard_page.dart';
 import '../di/injector.dart';
 import '../theme/app_theme.dart';
 import 'not_found_page.dart';
@@ -98,6 +99,7 @@ class AppRouter {
         path: Rutas.home,
         builder: (_, _) => const HomePage(),
         routes: [
+          GoRoute(path: 'patrullero', builder: (_, _) => const PatrulleroDashboardPage()),
           GoRoute(
             path: 'mapa',
             // Igual que en incidencias: el Bloc nace en la ruta y dispara la

@@ -135,6 +135,10 @@ class _LanzadorPanico extends StatelessWidget {
                 ),
               ),
               const _PieBusqueda(),
+              TextButton(
+                onPressed: () => context.go('/patrullero'),
+                child: const Text('Panel operador (alertas activas)'),
+              ),
             ],
           ),
         ),
