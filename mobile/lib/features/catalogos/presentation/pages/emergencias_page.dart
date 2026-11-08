@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import '../../../mapa/presentation/mapa_calor_page.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -97,11 +98,9 @@ class _TarjetaMapaCalor extends StatelessWidget {
       title: const Text('Mapa de Calor'),
       subtitle: const Text('Zonas de incidencia'),
       onTap: () {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(
-            content: Text('El mapa de calor: funcionalidad en preparacion'),
-          ));
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const MapaCalorPage()),
+        );
       },
     );
   }
