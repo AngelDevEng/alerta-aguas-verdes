@@ -48,5 +48,6 @@ class AlertaRemoteDataSourceImpl implements AlertaRemoteDataSource {
           }
           return id;
         },
+        publico: true,
       );
 }
