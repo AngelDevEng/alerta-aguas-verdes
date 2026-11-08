@@ -494,7 +494,7 @@ void _llamar(BuildContext context, {required bool comisaria}) {
 /// Dashboard/MainActivity/Login segun rol. Esas pantallas aun no existen
 /// (paridad filas 3 y 9), asi que mientras expone la unica accion de sesion.
 Future<void> _accionesSesion(BuildContext context) async {
-  Navigator.of(context).pushNamed('/login');
+  context.go('/login');
 }
 
 /// Aviso de funcion pendiente (mismo texto del menu anterior).
