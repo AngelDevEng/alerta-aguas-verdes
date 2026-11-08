@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/storage/token_store.dart';
 
 class MapaCalorPage extends StatefulWidget {
   const MapaCalorPage({super.key});
@@ -10,6 +11,7 @@ class MapaCalorPage extends StatefulWidget {
 }
 
 class _MapaCalorPageState extends State<MapaCalorPage> {
+  final TokenStore _store = TokenStore();
   final Dio _dio = Dio(BaseOptions(baseUrl: 'https://alerta-aguas-verdes-api.onrender.com/api/v1'));
   List<dynamic> _zonas = [];
 
@@ -21,7 +23,8 @@ class _MapaCalorPageState extends State<MapaCalorPage> {
 
   Future<void> _cargar() async {
     try {
-      final r = await _dio.get('/incidencias/zonas-calor');
+      final token = await _store.readAccess();
+      final r = await _dio.get('/incidencias/zonas-calor', options: Options(headers: {'Authorization': 'Bearer $token'}));
       setState(() => _zonas = (r.data as List));
     } catch (_) {}
   }
