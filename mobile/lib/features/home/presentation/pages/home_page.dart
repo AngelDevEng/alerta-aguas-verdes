@@ -9,8 +9,6 @@ import '../../../alertas/presentation/bloc/sos_bloc.dart';
 import '../../../alertas/presentation/bloc/sos_event.dart';
 import '../../../alertas/presentation/bloc/sos_state.dart';
 import '../../../rastreo/presentation/rastreo_ciudadano_page.dart';
-import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../catalogos/presentation/bloc/catalogos_bloc.dart';
 import '../../../catalogos/presentation/bloc/catalogos_event.dart';
 import '../../../catalogos/presentation/bloc/catalogos_state.dart';
@@ -496,51 +494,7 @@ void _llamar(BuildContext context, {required bool comisaria}) {
 /// Dashboard/MainActivity/Login segun rol. Esas pantallas aun no existen
 /// (paridad filas 3 y 9), asi que mientras expone la unica accion de sesion.
 Future<void> _accionesSesion(BuildContext context) async {
-  final accion = await showModalBottomSheet<String>(
-    context: context,
-    builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('Cerrar sesion'),
-            onTap: () => Navigator.of(context).pop('salir'),
-          ),
-        ],
-      ),
-    ),
-  );
-  if (accion == 'salir' && context.mounted) {
-    await _confirmarCierre(context);
-  }
-}
-
-Future<void> _confirmarCierre(BuildContext context) async {
-  // El legacy hace `finish()` y vuelve a la pantalla de login sin matar la
-  // sesion. Aca no hay pantalla de login intermedia (la guarda del router
-  // rebotaria al home), asi que atras cierra sesion, con confirmacion para
-  // no matarla sin querer.
-  final salir = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Cerrar sesion'),
-      content: const Text('Deseas cerrar la sesion?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancelar'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Cerrar sesion'),
-        ),
-      ],
-    ),
-  );
-  if (salir == true) {
-    GetIt.I<AuthBloc>().add(const AuthLogoutSolicitado());
-  }
+  Navigator.of(context).pushNamed('/login');
 }
 
 /// Aviso de funcion pendiente (mismo texto del menu anterior).
