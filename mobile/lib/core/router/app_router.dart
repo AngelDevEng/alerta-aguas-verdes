@@ -168,8 +168,9 @@ class AppRouter {
       final enLogin = destino == Rutas.login;
 
       if (usuario == null) {
-        // Sin sesión: solo se permite el login.
-        return enLogin ? null : Rutas.login;
+        // Sin sesión: se permite el login y el home (launcher ciudadano).
+        if (enLogin || destino == Rutas.home) return null;
+        return Rutas.login;
       }
       // Con sesión: no quedarse en el login.
       if (enLogin) return Rutas.home;
