@@ -7,6 +7,7 @@ const SELECT_BASE = `
          a.atendida_en AS "atendidaEn", a.precision_m AS "precisionM",
          ST_Y(a.ubicacion::geometry) AS latitud, ST_X(a.ubicacion::geometry) AS longitud,
          a.incidencia_id AS "incidenciaId", i.codigo AS "incidenciaCodigo",
+         i.unidad_asignada_id AS "unidadAsignadaId",
          a.reportante_id AS "reportanteId"
     FROM alertas a
     LEFT JOIN incidencias i ON i.id = a.incidencia_id`;

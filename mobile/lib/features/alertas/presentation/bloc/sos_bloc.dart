@@ -55,8 +55,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
         switch (r) {
           case Err(:final failure):
             emit(SosError(failure.message));
-          case Ok():
-            emit(const SosEnviado());
+          case Ok(:final value):
+            emit(SosEnviado(alertaId: value));
         }
     }
   }

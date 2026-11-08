@@ -8,6 +8,7 @@ import '../../../../core/router/app_router.dart';
 import '../../../alertas/presentation/bloc/sos_bloc.dart';
 import '../../../alertas/presentation/bloc/sos_event.dart';
 import '../../../alertas/presentation/bloc/sos_state.dart';
+import '../../../rastreo/presentation/rastreo_ciudadano_page.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../catalogos/presentation/bloc/catalogos_bloc.dart';
@@ -73,7 +74,14 @@ class HomePage extends StatelessWidget {
         listener: (context, state) {
           final mensaje = switch (state) {
             SosEnviando() => 'Enviando auxilio a central...',
-            SosEnviado() => 'Auxilio enviado a central',
+            SosEnviado(:final alertaId) => () {
+              if (alertaId != null) {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => RastreoCiudadanoPage(alertaId: alertaId),
+                ));
+              }
+              return 'Auxilio enviado a central';
+            }(),
             SosError(:final mensaje) => mensaje,
             _ => null,
           };

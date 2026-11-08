@@ -23,7 +23,10 @@ class SosEnviando extends SosState {
 
 /// Alerta creada: "Auxilio enviado a central" (texto del legacy).
 class SosEnviado extends SosState {
-  const SosEnviado();
+  const SosEnviado({this.alertaId});
+  final String? alertaId;
+  @override
+  List<Object?> get props => [alertaId];
 }
 
 /// Algo fallo (GPS o red).
