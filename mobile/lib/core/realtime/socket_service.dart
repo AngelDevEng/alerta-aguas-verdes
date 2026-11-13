@@ -13,7 +13,9 @@ class SocketService {
   bool _disposed = false;
 
   final _positionController = StreamController<Map<String, dynamic>>.broadcast();
+  final _alertaController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get positions => _positionController.stream;
+  Stream<Map<String, dynamic>> get alertas => _alertaController.stream;
 
   void connect() {
     if (_disposed) return;
@@ -31,6 +33,11 @@ class SocketService {
     _socket!.on('posicion_unidad', (data) {
       if (data is Map) {
         _positionController.add(Map<String, dynamic>.from(data));
+      }
+    });
+    _socket!.on('nueva_alerta_sos', (data) {
+      if (data is Map) {
+        _alertaController.add(Map<String, dynamic>.from(data));
       }
     });
     _socket!.onDisconnect((_) => _scheduleReconnect());
