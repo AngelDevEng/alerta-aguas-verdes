@@ -37,6 +37,7 @@ class Rutas {
   static const incidencias = '/incidencias';
   static const emergencias = '/emergencias';
   static const perfil = '/perfil';
+  static const patrullero = '/patrullero';
 }
 
 /// Puente BLoC -> GoRouter.
@@ -175,7 +176,11 @@ class AppRouter {
         return Rutas.login;
       }
       // Con sesión: no quedarse en el login.
-      if (enLogin) return Rutas.home;
+      if (enLogin) {
+        // SERENO va directo a su panel de alertas; el resto al home.
+        if (usuario.rol == 'SERENO') return Rutas.patrullero;
+        return Rutas.home;
+      }
 
       if (_exigeOperador(destino) && usuario.esCiudadano) {
         return Rutas.home;
