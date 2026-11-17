@@ -17,7 +17,9 @@ export class RealtimeService {
   notificarNuevaAlerta(alerta: any) {
     if (!this.server) return;
     this.logger.log(`Emitiendo nueva_alerta_sos: ${alerta.incidenciaId ?? alerta.id}`);
-    this.server.to('central').emit('nueva_alerta_sos', alerta);
+    // Un mismo socket puede estar en ambas salas (OPERADOR/ADMIN); un array de
+    // salas evita que reciba el evento dos veces.
+    this.server.to(['central', 'serenos']).emit('nueva_alerta_sos', alerta);
   }
 
   notificarCambioEstadoIncidencia(incidencia: any) {
