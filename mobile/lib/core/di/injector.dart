@@ -4,6 +4,7 @@ import '../location/location_service.dart';
 import '../network/api_client.dart';
 import '../network/auth_interceptor.dart';
 import '../realtime/socket_service.dart';
+import '../storage/sos_session_store.dart';
 import '../storage/token_store.dart';
 import '../../features/alertas/data/datasources/alerta_remote_datasource.dart';
 import '../../features/alertas/data/repositories/alerta_repository_impl.dart';
@@ -49,6 +50,8 @@ class Env {
 Future<void> configureDependencies() async {
   // --- core ---
   sl.registerLazySingleton<TokenStore>(TokenStore.new);
+  // Sesion anonima del ciudadano: aparte del JWT del operador.
+  sl.registerLazySingleton<SosSessionStore>(SosSessionStore.new);
 
   final tokens = sl<TokenStore>();
   final api = ApiClient(baseUrl: Env.apiBaseUrl);
@@ -190,7 +193,7 @@ Future<void> configureDependencies() async {
 
   // --- alertas (SOS) ---
   sl.registerLazySingleton<AlertaRemoteDataSource>(
-    () => AlertaRemoteDataSourceImpl(sl<ApiClient>()),
+    () => AlertaRemoteDataSourceImpl(sl<ApiClient>(), sl<SosSessionStore>()),
   );
   sl.registerLazySingleton<AlertaRepository>(
     () => AlertaRepositoryImpl(sl<AlertaRemoteDataSource>()),

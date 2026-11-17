@@ -1,5 +1,6 @@
 import '../../../../core/error/result.dart';
-import '../../domain/repositories/alerta_repository.dart';
+import '../entities/alerta_sos.dart';
+import '../repositories/alerta_repository.dart';
 
 /// Envia un SOS con la posicion dada (`POST /alertas`).
 ///
@@ -11,7 +12,7 @@ class EnviarSosUseCase {
 
   final AlertaRepository _repo;
 
-  Future<Result<String>> call({
+  Future<Result<AlertaSos>> call({
     required double latitud,
     required double longitud,
     double? precisionM,
@@ -22,7 +23,7 @@ class EnviarSosUseCase {
         latitud > 90 ||
         longitud < -180 ||
         longitud > 180) {
-      return const Err<String>(
+      return const Err<AlertaSos>(
         ValidationFailure(
           'La ubicacion recibida no es valida. Revisa el GPS e intenta de nuevo.',
         ),

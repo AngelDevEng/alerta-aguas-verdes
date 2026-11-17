@@ -1,5 +1,6 @@
 import 'package:alerta_aguas_verdes/core/error/result.dart';
 import 'package:alerta_aguas_verdes/core/location/location_service.dart';
+import 'package:alerta_aguas_verdes/features/alertas/domain/entities/alerta_sos.dart';
 import 'package:alerta_aguas_verdes/features/alertas/domain/repositories/alerta_repository.dart';
 import 'package:alerta_aguas_verdes/features/alertas/domain/usecases/alerta_usecases.dart';
 import 'package:alerta_aguas_verdes/features/alertas/presentation/bloc/sos_bloc.dart';
@@ -16,6 +17,7 @@ import 'package:alerta_aguas_verdes/features/home/presentation/pages/home_page.d
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:go_router/go_router.dart';
 
 /// Doble del repositorio de autenticacion (mismo esquema que auth_bloc_test).
 class _AuthFalso implements AuthRepository {
@@ -97,14 +99,14 @@ class _AlertasFalsa implements AlertaRepository {
   double? latitudEnviada;
 
   @override
-  Future<Result<String>> crearSos({
+  Future<Result<AlertaSos>> crearSos({
     required double latitud,
     required double longitud,
     double? precisionM,
   }) async {
     llamadas++;
     latitudEnviada = latitud;
-    return const Ok('alerta-1');
+    return const Ok(AlertaSos(alertaId: 'alerta-1', sessionToken: 'token-1'));
   }
 }
 
@@ -151,7 +153,22 @@ Future<void> _mostrar(
   );
   GetIt.I.registerFactory<SosBloc>(() => sos);
 
-  await tester.pumpWidget(const MaterialApp(home: HomePage()));
+  // El escudo usa `context.go('/login')`; sin GoRouter la prueba reventaba
+  // con "No GoRouter found in context".
+  final router = GoRouter(
+    initialLocation: '/',
+    routes: [
+      GoRoute(path: '/', builder: (_, _) => const HomePage()),
+      GoRoute(
+        path: '/login',
+        builder: (_, _) => const Scaffold(
+          body: Center(child: Text('Login')),
+        ),
+      ),
+    ],
+  );
+
+  await tester.pumpWidget(MaterialApp.router(routerConfig: router));
   await tester.pumpAndSettle();
 }
 
@@ -192,14 +209,13 @@ void main() {
     expect(find.byKey(const Key('menu_rastreo')), findsNothing);
   });
 
-  testWidgets('el escudo ofrece cerrar la sesion (stand-in de admin())',
-      (tester) async {
+  testWidgets('el escudo lleva al login (stand-in de admin())', (tester) async {
     await _mostrar(tester);
 
     await tester.tap(find.byKey(const Key('home_escudo')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Cerrar sesion'), findsOneWidget);
+    expect(find.text('Login'), findsOneWidget);
   });
 
   testWidgets('tocar SOS envia la alerta y confirma con el texto del legacy',
@@ -208,7 +224,10 @@ void main() {
     await _mostrar(tester, alertas: alertas);
 
     await tester.tap(find.byKey(const Key('menu_sos')));
-    await tester.pumpAndSettle();
+    // La navegacion a RastreoCiudadanoPage deja un Timer.periodic vivo; no se
+    // usa pumpAndSettle para no esperar a que el timer se agote.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(alertas.llamadas, 1);
     expect(alertas.latitudEnviada, isNotNull);

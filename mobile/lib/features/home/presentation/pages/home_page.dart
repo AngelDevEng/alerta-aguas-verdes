@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/router/app_router.dart';
+import '../../../../core/storage/sos_session_store.dart';
 import '../../../alertas/presentation/bloc/sos_bloc.dart';
 import '../../../alertas/presentation/bloc/sos_event.dart';
 import '../../../alertas/presentation/bloc/sos_state.dart';
@@ -70,23 +71,36 @@ class HomePage extends StatelessWidget {
         listenWhen: (previo, actual) =>
             previo != actual && actual is! SosInicial,
         listener: (context, state) {
+          if (state is SosEnviado) {
+            final alertaId = state.alertaId;
+            final sessionToken = state.sessionToken;
+            if (alertaId != null && sessionToken != null) {
+              // El token anonimo vive aparte del JWT: es lo unico que permite
+              // volver al seguimiento aunque se cierre la app.
+              if (GetIt.I.isRegistered<SosSessionStore>()) {
+                GetIt.I<SosSessionStore>().save(
+                  alertaId: alertaId,
+                  sessionToken: sessionToken,
+                ).catchError((_) {});
+              }
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => RastreoCiudadanoPage(
+                  alertaId: alertaId,
+                  sessionToken: sessionToken,
+                ),
+              ));
+            }
+            _snack(context, 'Auxilio enviado a central');
+            return;
+          }
+
           final mensaje = switch (state) {
             SosEnviando() => 'Enviando auxilio a central...',
-            SosEnviado(:final alertaId) => () {
-              if (alertaId != null) {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => RastreoCiudadanoPage(alertaId: alertaId),
-                ));
-              }
-              return 'Auxilio enviado a central';
-            }(),
             SosError(:final mensaje) => mensaje,
             _ => null,
           };
           if (mensaje == null) return;
-          ScaffoldMessenger.of(context)
-            ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text(mensaje)));
+          _snack(context, mensaje);
         },
         child: const _LanzadorPanico(),
       ),
@@ -135,6 +149,7 @@ class _LanzadorPanico extends StatelessWidget {
                 ),
               ),
               const _PieBusqueda(),
+              const _SosReanudarBoton(),
               TextButton(
                 onPressed: () => context.go('/patrullero'),
                 child: const Text('Panel operador (alertas activas)'),
@@ -506,4 +521,75 @@ void _pendiente(BuildContext context, String funcion) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text('$funcion: funcionalidad en preparacion')));
+}
+
+void _snack(BuildContext context, String mensaje) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(mensaje)));
+}
+
+/// Reanuda el seguimiento si el ciudadano ya tenia una SOS activa guardada.
+///
+/// La pantalla se abre con `alertaId` + `sessionToken`; si la alerta ya cerro,
+/// `RastreoCiudadanoPage` recibe 401/404, limpia la sesion y avisa. No se
+/// intenta adivinar el estado aqui: el servidor es la fuente de verdad.
+class _SosReanudarBoton extends StatefulWidget {
+  const _SosReanudarBoton();
+
+  @override
+  State<_SosReanudarBoton> createState() => _SosReanudarBotonState();
+}
+
+class _SosReanudarBotonState extends State<_SosReanudarBoton> {
+  bool _haySesion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  Future<void> _cargar() async {
+    if (!GetIt.I.isRegistered<SosSessionStore>()) return;
+    try {
+      final sesion = await GetIt.I<SosSessionStore>().read();
+      if (!mounted) return;
+      setState(() => _haySesion = sesion != null);
+    } catch (_) {
+      // Sin almacenamiento seguro disponible (p. ej. test) no se rompe el home.
+    }
+  }
+
+  Future<void> _abrir() async {
+    if (!GetIt.I.isRegistered<SosSessionStore>()) return;
+    try {
+      final sesion = await GetIt.I<SosSessionStore>().read();
+      if (sesion == null || !mounted) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => RastreoCiudadanoPage(
+          alertaId: sesion.alertaId,
+          sessionToken: sesion.sessionToken,
+        ),
+      ));
+    } catch (_) {
+      // Mismo criterio que _cargar.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_haySesion) return const SizedBox.shrink();
+    return TextButton.icon(
+      key: const Key('menu_reanudar_sos'),
+      onPressed: _abrir,
+      icon: const Icon(Icons.my_location),
+      label: const Text('Seguir rastreo de mi alerta'),
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        minimumSize: const Size(0, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
 }
