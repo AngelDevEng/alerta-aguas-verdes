@@ -30,5 +30,9 @@ local.properties
 *.log
 tsconfig.tsbuildinfo
 
+# ---- Agent / sesiones gestionadas ----
+.kilo/
+.vscode/
+
 # Capturas de evidencia: material sensible, no debe versionarse
 b7363468-d479-422f-bbee-2fe68760917e.jpg

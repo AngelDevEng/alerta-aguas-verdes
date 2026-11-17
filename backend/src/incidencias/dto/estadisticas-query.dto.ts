@@ -10,7 +10,4 @@ export class EstadisticasQueryDto {
 
   @ApiPropertyOptional({ example: 'ROBO' })
   @IsOptional() @IsString() tipo?: string;
-
-  @ApiPropertyOptional({ description: 'Zona/distrito' })
-  @IsOptional() @IsString() zona?: string;
 }

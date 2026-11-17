@@ -175,7 +175,6 @@ export class IncidenciasService {
     if (q.desde) { params.push(q.desde); w += ` AND i.ocurrido_en >= $${params.length}`; }
     if (q.hasta) { params.push(q.hasta); w += ` AND i.ocurrido_en <= $${params.length}`; }
     if (q.tipo) { params.push(q.tipo.toLowerCase()); w += ` AND (lower(t.nombre) = $${params.length} OR lower(t.codigo) = $${params.length})`; }
-    if (q.zona) { params.push(q.zona); w += ` AND i.zona = $${params.length}`; }
 
     const porTipo = await this.ds.query(
       `SELECT t.codigo, t.nombre, count(*)::int AS total
