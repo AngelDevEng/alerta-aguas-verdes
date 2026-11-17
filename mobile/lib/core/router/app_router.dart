@@ -23,6 +23,7 @@ import '../../features/incidencias/presentation/pages/reportar_incidencia_page.d
 import '../../features/mapa/presentation/bloc/mapa_bloc.dart';
 import '../../features/mapa/presentation/bloc/mapa_event.dart';
 import '../../features/mapa/presentation/pages/mapa_page.dart';
+import '../../features/patrullero/presentation/patrullero_dashboard_page.dart';
 import '../di/injector.dart';
 import '../theme/app_theme.dart';
 import 'not_found_page.dart';
@@ -36,6 +37,7 @@ class Rutas {
   static const incidencias = '/incidencias';
   static const emergencias = '/emergencias';
   static const perfil = '/perfil';
+  static const patrullero = '/patrullero';
 }
 
 /// Puente BLoC -> GoRouter.
@@ -98,6 +100,7 @@ class AppRouter {
         path: Rutas.home,
         builder: (_, _) => const HomePage(),
         routes: [
+          GoRoute(path: 'patrullero', builder: (_, _) => const PatrulleroDashboardPage()),
           GoRoute(
             path: 'mapa',
             // Igual que en incidencias: el Bloc nace en la ruta y dispara la
@@ -168,11 +171,16 @@ class AppRouter {
       final enLogin = destino == Rutas.login;
 
       if (usuario == null) {
-        // Sin sesión: solo se permite el login.
-        return enLogin ? null : Rutas.login;
+        // Sin sesión: se permite el login y el home (launcher ciudadano).
+        if (enLogin || destino == Rutas.home) return null;
+        return Rutas.login;
       }
       // Con sesión: no quedarse en el login.
-      if (enLogin) return Rutas.home;
+      if (enLogin) {
+        // SERENO va directo a su panel de alertas; el resto al home.
+        if (usuario.rol == 'SERENO') return Rutas.patrullero;
+        return Rutas.home;
+      }
 
       if (_exigeOperador(destino) && usuario.esCiudadano) {
         return Rutas.home;

@@ -22,3 +22,13 @@ services:
         sync: false
       - key: NODE_ENV
         value: production
+      - key: IP_LOG_SECRET
+        sync: false
+      - key: RATE_LIMIT_IP_MAX
+        sync: false
+      - key: RATE_LIMIT_IP_WINDOW_MS
+        value: 600000
+      - key: RATE_LIMIT_DEVICE_MAX
+        sync: false
+      - key: RATE_LIMIT_DEVICE_WINDOW_MS
+        value: 600000

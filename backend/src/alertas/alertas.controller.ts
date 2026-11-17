@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AlertasService } from './alertas.service';
 import { CreateAlertaDto } from './dto/create-alerta.dto';
@@ -7,6 +7,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuarioAutenticado } from '../common/types';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
 
 @ApiTags('alertas')
 @ApiBearerAuth()
@@ -17,11 +18,20 @@ export class AlertasController {
   /**
    * Unico endpoint publico a proposito: el ciudadano que pulsa SOS no tiene cuenta.
    * No se expone ningun dato del reporte mas alla de lo que el propio usuario envia.
+   *
+   * `X-Device-Id` permite una sola SOS activa por dispositivo; `X-Session-Token`
+   * no se recibe aca: el token viaja en el cuerpo de la respuesta.
    */
   @Public()
+  @UseGuards(RateLimitGuard)
   @Post()
-  crear(@Body() dto: CreateAlertaDto, @CurrentUser() u?: UsuarioAutenticado) {
-    return this.svc.crear(dto, u?.id);
+  crear(
+    @Body() dto: CreateAlertaDto,
+    @Headers('x-device-id') dispositivoId?: string,
+    @Ip() ip?: string,
+    @CurrentUser() u?: UsuarioAutenticado,
+  ) {
+    return this.svc.crear(dto, u?.id, dispositivoId, ip);
   }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
@@ -35,6 +45,19 @@ export class AlertasController {
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get(':id')
   una(@Param('id', ParseUUIDPipe) id: string) { return this.svc.findOne(id); }
+
+  /**
+   * Seguimiento del ciudadano. Publico pero no abierto: exige el token anonimo
+   * que solo se entrego al crear (o reutilizar) esa alerta.
+   */
+  @Public()
+  @Get(':id/seguimiento')
+  seguimiento(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-session-token') token?: string,
+  ) {
+    return this.svc.seguimiento(id, token);
+  }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN')
   @Patch(':id/estado')

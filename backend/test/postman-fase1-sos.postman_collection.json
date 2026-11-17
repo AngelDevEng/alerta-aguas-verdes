@@ -1,0 +1,438 @@
+{
+  "info": {
+    "name": "Alerta Aguas Verdes — Fase 1: Pruebas de despliegue (1-24)",
+    "description": "COLECCION PARA VALIDAR FASE 1 EN PRODUCCION.\n\nNUMERACION CONGELADA: pruebas 1-24. Solo se añaden pruebas al final.\nFASE 2 REQUIERE: pruebas 1 a 24 deben pasar.\n\nADVERTENCIA IMPORTANTE:\n- Las pruebas de rate limit (23 y 24) BLOQUEAN TU IP POR 10 MINUTOS si se ejecutan completas.\n- Solo ejecutar 23 y 24 DESPUES de confirmar que la IP real se lee correctamente (pruebas 13 y 14).\n- Las pruebas 20, 21, 22 requieren SET ROLE anon en SQL Editor de Supabase (NUNCA rol por defecto del editor).\n\nPLAN DE CUOTOS:\n- Pruebas funcionales (1-22): ejecutar con RATE_LIMIT_IP_MAX alto (variable de entorno en Render, ej. 100) para no agotar el cupo durante la validacion.\n- Pruebas de rate limit (23-24): ejecutar con el valor definitivo (RATE_LIMIT_IP_MAX=10, RATE_LIMIT_DEVICE_MAX=3) DESPUES de un reinicio del backend, con los contadores limpios.\n\nVariables requeridas:\n- baseUrl: URL de la API en Render (ej. https://alerta-aguas-verdes-api.onrender.com)\n- adminToken: JWT de un usuario ADMIN (obtener via POST /api/v1/auth/login)\n- serenoToken: JWT de un usuario SERENO (variable de entorno del script de WebSocket, no de la coleccion)\n\nX-Device-Id: cada prueba que crea alertas usa un X-Device-Id distinto, EXCEPTO la prueba 2 (dedupe) que reusa el de la prueba 1 por diseño.\n\nLimpieza despues de las pruebas:\n1. Cerrar alertas de prueba con PATCH /api/v1/alertas/:id/estado (estado: CANCELADA).\n2. Ejecutar database/limpieza_pruebas_fase1.sql para borrar en transaccion todo lo creado con dispositivo_id LIKE 'test-%'.\n\nPruebas automaticas (con test script): 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 17\nPrueba automatica (Collection Runner): 11 (ejecutar con 24 iteraciones, 5s entre peticiones)\nPrueba manual (script Node): 6, 15\nPruebas manuales (SQL Editor con SET ROLE anon o clave anon, NUNCA como rol por defecto del editor): 16, 18, 19, 20, 21, 22\nPruebas manuales (logs de Render): 13, 14\nPruebas de rate limit (AL FINAL, bloquean IP 10 min): 23, 24\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Crear SOS ciudadano ✅",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "test-dispositivo-crear-001" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": JSON.stringify({
+            latitud: -3.4825,
+            longitud: -80.245,
+            telefono: "51900000000",
+            direccion: "Prueba Fase 1 - crear",
+            origen: "APP"
+          })
+        },
+        "url": "{{baseUrl}}/api/v1/alertas",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "pm.test('Status es 201', () => pm.response.to.have.status(201));",
+            "pm.test('Respuesta tiene id', () => pm.expect(pm.response.json().id).to.be.a('string'));",
+            "pm.test('Estado es ACTIVA', () => pm.expect(pm.response.json().estado).to.eql('ACTIVA'));",
+            "pm.test('Respuesta tiene sessionToken', () => pm.expect(pm.response.json().sessionToken).to.be.a('string'));",
+            "pm.test('Respuesta no incluye dispositivo_id', () => pm.expect(pm.response.json()).to.not.have.property('dispositivo_id'));",
+            "pm.globals.set('alertaId', pm.response.json().id);",
+            "pm.globals.set('sessionToken', pm.response.json().sessionToken);"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "2. Dedupe por dispositivo (mismo X-Device-Id que prueba 1) ✅",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "test-dispositivo-crear-001" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": JSON.stringify({
+            latitud: -3.4826,
+            longitud: -80.246,
+            telefono: "51900000000",
+            direccion: "Prueba Fase 1 - dedupe",
+            origen: "APP"
+          })
+        },
+        "url": "{{baseUrl}}/api/v1/alertas",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "pm.test('Status es 201', () => pm.response.to.have.status(201));",
+            "pm.test('Devuelve la misma alertaId', () => pm.expect(pm.response.json().id).to.eql(pm.globals.get('alertaId')));",
+            "pm.test('sessionToken es nuevo', () => pm.expect(pm.response.json().sessionToken).to.not.eql(pm.globals.get('sessionToken')));",
+            "pm.globals.set('sessionToken', pm.response.json().sessionToken);"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "3. Seguimiento sin token (401) ✅",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/seguimiento",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "pm.test('Status es 401', () => pm.response.to.have.status(401));"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "4. Seguimiento con token válido (200) ✅",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Session-Token", "value": "{{sessionToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/seguimiento",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "pm.test('Status es 200', () => pm.response.to.have.status(200));",
+            "pm.test('Respuesta tiene alerta', () => pm.expect(pm.response.json().alerta).to.be.an('object'));",
+            "pm.test('Respuesta tiene ciudadano.ubicaciones', () => pm.expect(pm.response.json().ciudadano.ubicaciones).to.be.an('array'));"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "5. Token inválido (401) ✅",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Session-Token", "value": "token-invalido" }
+        ],
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/seguimiento",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "pm.test('Status es 401', () => pm.response.to.have.status(401));"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "6. WebSocket: nueva_alerta_sos llega a sala serenos (script Node, SERENO token) ✅",
+      "request": {
+        "description": "Ejecutar: SERENO_TOKEN=<jwt> X_DEVICE_ID=test-dispositivo-ws-001 node scripts/test-ws-sos-alerta.js",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 6 MANUAL: ejecutar script de WebSocket con SERENO_TOKEN para verificar nueva_alerta_sos en sala serenos.');"
+        ]} }
+      ]
+    },
+    {
+      "name": "7. Cierre acorta token (no revoca; expira_en <= ahora + 10 min; GET /seguimiento sigue 200) ✅",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": JSON.stringify({ estado: "CANCELADA" })
+        },
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/estado"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('Status es 200', () => pm.response.to.have.status(200));",
+          "pm.test('Estado es terminal', () => ['CANCELADA','ATENDIDA','FALSA'].includes(pm.response.json().alerta.estado));",
+          "pm.test('GET /seguimiento sigue 200 tras cierre', () => {",
+          "  pm.sendRequest({",
+          "    url: pm.request.url.replace('/estado', '/seguimiento'),",
+          "    method: 'GET',",
+          "    header: { 'X-Session-Token': pm.globals.get('sessionToken') }",
+          "  }, (err, res) => {",
+          "    pm.test('GET /seguimiento despues de cierre es 200', () => pm.expect(res.code).to.eql(200));",
+          "  });",
+          "});"
+        ]} }
+      ]
+    },
+    {
+      "name": "8. dispositivo_id no está en la respuesta ✅",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Session-Token", "value": "{{sessionToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/seguimiento",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "pm.test('Respuesta no incluye dispositivo_id en alerta', () => pm.expect(pm.response.json().alerta).to.not.have.property('dispositivo_id'));"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "9. Respuesta conserva todos los campos antiguos ✅",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Session-Token", "value": "{{sessionToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/seguimiento",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "const a = pm.response.json().alerta;",
+            "pm.test('Tiene id', () => pm.expect(a).to.have.property('id'));",
+            "pm.test('Tiene telefono', () => pm.expect(a).to.have.property('telefono'));",
+            "pm.test('Tiene estado', () => pm.expect(a).to.have.property('estado'));",
+            "pm.test('Tiene creadaEn', () => pm.expect(a).to.have.property('creadaEn'));",
+            "pm.test('Tiene latitud', () => pm.expect(a).to.have.property('latitud'));",
+            "pm.test('Tiene longitud', () => pm.expect(a).to.have.property('longitud'));",
+            "pm.test('Tiene direccion', () => pm.expect(a).to.have.property('direccion'));",
+            "pm.test('Tiene origen', () => pm.expect(a).to.have.property('origen'));",
+            "pm.test('Tiene precisionM', () => pm.expect(a).to.have.property('precisionM'));",
+            "pm.test('Tiene incidenciaId', () => pm.expect(a).to.have.property('incidenciaId'));",
+            "pm.test('Tiene reportanteId', () => pm.expect(a).to.have.property('reportanteId'));",
+            "pm.test('Tiene sessionToken en raiz', () => pm.expect(pm.response.json()).to.have.property('sessionToken'));"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "10. POST /posicion rechazado en alerta terminal ✅",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Session-Token", "value": "{{sessionToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": JSON.stringify({ latitud: -3.4825, longitud: -80.245 })
+        },
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/posicion"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('POST /posicion rechazado en alerta terminal (400/409)', () => pm.expect(pm.response.code).to.be.oneOf([400, 409]));"
+        ]} }
+      ]
+    },
+    {
+      "name": "11. Seguimiento repetido cada 5s durante 2 min, siempre 200 (Collection Runner) ✅",
+      "request": {
+        "description": "Ejecutar via Collection Runner: 24 iteraciones, 5s de retraso entre peticiones. Cada iteracion es una peticion HTTP independiente; no depende del tiempo limite de los scripts de Postman.",
+        "method": "GET",
+        "header": [
+          { "key": "X-Session-Token", "value": "{{sessionToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/seguimiento",
+        "event": [
+          { "listen": "test", "script": { "exec": [
+            "pm.test('Status es 200', () => pm.response.to.have.status(200));"
+          ]} }
+        ]
+      }
+    },
+    {
+      "name": "12. POST /cancelar rechazado en alerta terminal ✅",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Session-Token", "value": "{{sessionToken}}" }
+        ],
+        "body": { "mode": "raw", "raw": "{}" },
+        "url": "{{baseUrl}}/api/v1/alertas/{{alertaId}}/cancelar"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('POST /cancelar rechazado en alerta terminal (400/409)', () => pm.expect(pm.response.code).to.be.oneOf([400, 409]));"
+        ]} }
+      ]
+    },
+    {
+      "name": "13. IP real desde red A (logs de Render, IP_LOG_SECRET) ✅",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 13 MANUAL: desde red A, revisar logs de Render para ip_hmac. Dos peticiones desde la misma red deben dar el mismo ip_hmac.');"
+        ]} }
+      ]
+    },
+    {
+      "name": "14. IP real desde red B (logs de Render, IP_LOG_SECRET) ✅",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 14 MANUAL: desde red B (distinta a A), revisar logs de Render para ip_hmac. Otra red debe dar ip_hmac distinto. Si todos coinciden, avisar y NO ejecutar pruebas de rate limit (23-24).');"
+        ]} }
+      ]
+    },
+    {
+      "name": "15. DOS POST simultáneos mismo dispositivo (solo una alerta viva) ✅",
+      "request": {
+        "description": "Ejecutar script Node: ADMIN_TOKEN=<jwt> X_DEVICE_ID=test-dispositivo-doble-001 node scripts/test-doble-post.js. Verifica que solo queda UNA alerta viva (dedupe).",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 15 MANUAL: ejecutar script de doble POST paralelo para verificar dedupe por dispositivo.');"
+        ]} }
+      ]
+    },
+    {
+      "name": "16. sessions_anonimas guarda solo hash (DB/SQL Editor) ✅",
+      "request": {
+        "description": "Ejecutar en Supabase SQL Editor: SELECT length(token_hash) = 64 AS es_hash_valido, token_hash != '<sessionToken>' AS no_coincide_con_token_claro FROM sessions_anonimas WHERE alerta_id = '<alertaId>'; Debe devolver true en ambas columnas.",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 16 MANUAL: SQL Editor, SELECT length(token_hash)=64, token_hash != sessionToken_claro FROM sessions_anonimas WHERE alerta_id = \\'<' + pm.globals.get('alertaId') + '>'\\'; Ambas columnas deben ser true.');"
+        ]} }
+      ]
+    },
+    {
+      "name": "17. Regresión: /health, login, listado incidencias ✅",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('/health responde 200', () => pm.response.to.have.status(200));"
+        ]} }
+      ]
+    },
+    {
+      "name": "18. Alertas previas: estados y expira_en, cuántas ACTIVA ya vencidas ✅",
+      "request": {
+        "description": "Ejecutar en Supabase SQL Editor: SELECT id, estado, expira_en, expira_en < now() AS vencida FROM alertas WHERE estado = 'ACTIVA' ORDER BY creada_en DESC; Cuenta cuántas ACTIVA tienen expira_en < now(). Para cerrarlas: PATCH /api/v1/alertas/:id/estado con { estado: 'CANCELADA' } y adminToken.",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 18 MANUAL: SQL Editor, SELECT id, estado, expira_en, expira_en < now() AS vencida FROM alertas WHERE estado = \\'ACTIVA\\' ORDER BY creada_en DESC;');"
+        ]} }
+      ]
+    },
+    {
+      "name": "19. API pública Supabase bloqueada (SET ROLE anon + clave anon REST) ✅",
+      "request": {
+        "description": "METODO A - SQL Editor (SET ROLE anon): SELECT * FROM alertas LIMIT 1; -> 42501. METODO B - REST con clave anon: GET https://<project-ref>.supabase.co/rest/v1/alertas?select=* con header apikey=<anon-key> y Authorization: Bearer <anon-key>; -> 401/403. NUNCA como rol por defecto del editor.",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 19 MANUAL: (A) SQL Editor SET ROLE anon; SELECT * FROM alertas LIMIT 1; -> 42501. (B) REST: GET https://<ref>.supabase.co/rest/v1/alertas?select=* headers: apikey=<anon-key>, Authorization: Bearer <anon-key> -> 401/403.');"
+        ]} }
+      ]
+    },
+    {
+      "name": "20. Vistas bloqueadas para anon (SET ROLE anon, SQL Editor) ⚠️ REQUISITO FASE 2",
+      "request": {
+        "description": "Ejecutar en Supabase SQL Editor con SET ROLE anon: SELECT * FROM v_alertas_activas y SELECT * FROM v_incidencias_geojson; ambas deben fallar con 42501. NUNCA como rol por defecto del editor.",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 20 MANUAL (REQUISITO FASE 2): SQL Editor, SET ROLE anon; SELECT * FROM v_alertas_activas y v_incidencias_geojson -> 42501.');"
+        ]} }
+      ]
+    },
+    {
+      "name": "21. Secuencias bloqueadas para anon (SET ROLE anon, SQL Editor) ⚠️ REQUISITO FASE 2",
+      "request": {
+        "description": "Ejecutar en Supabase SQL Editor con SET ROLE anon: nextval('seq_codigo_incidencia'); debe fallar con 42501. NUNCA como rol por defecto del editor.",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 21 MANUAL (REQUISITO FASE 2): SQL Editor, SET ROLE anon; nextval(\\'seq_codigo_incidencia\\') -> 42501.');"
+        ]} }
+      ]
+    },
+    {
+      "name": "22. ALTER DEFAULT PRIVILEGES (owner crea tabla, SET ROLE anon, 42501, limpia) ⚠️ REQUISITO FASE 2",
+      "request": {
+        "description": "Ejecutar en Supabase SQL Editor como owner: CREATE TABLE prueba_anon (id int); Luego SET ROLE anon; SELECT * FROM prueba_anon; → 42501. Al final: RESET ROLE; DROP TABLE prueba_anon;",
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/health"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "console.log('PRUEBA 22 MANUAL (REQUISITO FASE 2): SQL Editor como owner, CREATE TABLE prueba_anon; SET ROLE anon; SELECT * FROM prueba_anon; -> 42501. Al final: RESET ROLE; DROP TABLE prueba_anon;');"
+        ]} }
+      ]
+    },
+    {
+      "name": "23. Rate limit por IP (11a peticion -> 429) [AL FINAL - BLOQUEA IP 10 MIN] ⚠️",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "test-rate-limit-ip-999" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": JSON.stringify({ latitud: -3.4825, longitud: -80.245, telefono: "51900000000", direccion: "Rate IP", origen: "APP" })
+        },
+        "url": "{{baseUrl}}/api/v1/alertas"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 429) {",
+          "  pm.test('Status es 429 al superar límite IP', () => pm.response.to.have.status(429));",
+          "  pm.test('Tiene Retry-After', () => pm.expect(pm.response.headers.get('Retry-After')).to.not.be.undefined);",
+          "} else {",
+          "  console.log('Aún no se alcanzó el límite IP (necesitan 10 peticiones desde la misma IP).');",
+          "}"
+        ]} }
+      ]
+    },
+    {
+      "name": "24. Rate limit por dispositivo (4a peticion -> 429) [AL FINAL] ⚠️",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Device-Id", "value": "test-rate-limit-device-999" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": JSON.stringify({ latitud: -3.4825, longitud: -80.245, telefono: "51900000000", direccion: "Rate Device", origen: "APP" })
+        },
+        "url": "{{baseUrl}}/api/v1/alertas"
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 429) {",
+          "  pm.test('Status es 429 al superar límite dispositivo', () => pm.response.to.have.status(429));",
+          "} else {",
+          "  console.log('Aún no se alcanzó el límite dispositivo (necesitan 3 peticiones con mismo X-Device-Id).');",
+          "}"
+        ]} }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "https://alerta-aguas-verdes-api.onrender.com", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "alertaId", "value": "", "type": "string" },
+    { "key": "sessionToken", "value": "", "type": "string" }
+  ]
+}

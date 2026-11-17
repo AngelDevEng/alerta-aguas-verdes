@@ -1,4 +1,5 @@
 import '../../../../core/error/result.dart';
+import '../../domain/entities/alerta_sos.dart';
 import '../../domain/repositories/alerta_repository.dart';
 import '../datasources/alerta_remote_datasource.dart';
 
@@ -8,7 +9,7 @@ class AlertaRepositoryImpl implements AlertaRepository {
   final AlertaRemoteDataSource _remote;
 
   @override
-  Future<Result<String>> crearSos({
+  Future<Result<AlertaSos>> crearSos({
     required double latitud,
     required double longitud,
     double? precisionM,

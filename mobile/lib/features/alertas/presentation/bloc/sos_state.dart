@@ -22,8 +22,16 @@ class SosEnviando extends SosState {
 }
 
 /// Alerta creada: "Auxilio enviado a central" (texto del legacy).
+///
+/// `alertaId` y `sessionToken` son lo que el ciudadano necesita para volver a
+/// entrar a su seguimiento aunque cierre la app: se guardan en almacenamiento
+/// seguro aparte del JWT.
 class SosEnviado extends SosState {
-  const SosEnviado();
+  const SosEnviado({this.alertaId, this.sessionToken});
+  final String? alertaId;
+  final String? sessionToken;
+  @override
+  List<Object?> get props => [alertaId, sessionToken];
 }
 
 /// Algo fallo (GPS o red).

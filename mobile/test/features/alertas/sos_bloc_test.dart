@@ -1,5 +1,6 @@
 import 'package:alerta_aguas_verdes/core/error/result.dart';
 import 'package:alerta_aguas_verdes/core/location/location_service.dart';
+import 'package:alerta_aguas_verdes/features/alertas/domain/entities/alerta_sos.dart';
 import 'package:alerta_aguas_verdes/features/alertas/domain/repositories/alerta_repository.dart';
 import 'package:alerta_aguas_verdes/features/alertas/domain/usecases/alerta_usecases.dart';
 import 'package:alerta_aguas_verdes/features/alertas/presentation/bloc/sos_bloc.dart';
@@ -48,7 +49,7 @@ class _AlertasFake implements AlertaRepository {
   double? precisionEnviada;
 
   @override
-  Future<Result<String>> crearSos({
+  Future<Result<AlertaSos>> crearSos({
     required double latitud,
     required double longitud,
     double? precisionM,
@@ -58,7 +59,7 @@ class _AlertasFake implements AlertaRepository {
     longitudEnviada = longitud;
     precisionEnviada = precisionM;
     if (falla != null) return Err(falla!);
-    return const Ok('alerta-1');
+    return const Ok(AlertaSos(alertaId: 'alerta-1', sessionToken: 'token-1'));
   }
 }
 
@@ -88,14 +89,16 @@ void main() {
       expect(repo.precisionEnviada, isNull);
     });
 
-    test('propaga el id de la alerta creada', () async {
+    test('propaga el id y el token de la alerta creada', () async {
       final res = await EnviarSosUseCase(_AlertasFake())(
         latitud: -3.4825,
         longitud: -80.245,
         precisionM: 5,
       );
 
-      expect(res.valueOrNull, 'alerta-1');
+      expect(res.isOk, isTrue);
+      expect(res.valueOrNull?.alertaId, 'alerta-1');
+      expect(res.valueOrNull?.sessionToken, 'token-1');
     });
 
     test('propaga la falla del backend tal cual', () async {
@@ -147,7 +150,10 @@ void main() {
       'envio exitoso: Enviando -> Enviado, con la posicion del GPS',
       build: () => nuevoBloc(),
       act: (bloc) => bloc.add(const SosSolicitado()),
-      expect: () => const [SosEnviando(), SosEnviado()],
+      expect: () => const [
+        SosEnviando(),
+        SosEnviado(alertaId: 'alerta-1', sessionToken: 'token-1'),
+      ],
       verify: (_) {
         expect(repo.llamadas, 1);
         expect(repo.latitudEnviada, -3.4825);
@@ -189,7 +195,10 @@ void main() {
         bloc.add(const SosSolicitado());
       },
       wait: const Duration(milliseconds: 200),
-      expect: () => const [SosEnviando(), SosEnviado()],
+      expect: () => const [
+        SosEnviando(),
+        SosEnviado(alertaId: 'alerta-1', sessionToken: 'token-1'),
+      ],
       verify: (_) => expect(repo.llamadas, 1),
     );
   });

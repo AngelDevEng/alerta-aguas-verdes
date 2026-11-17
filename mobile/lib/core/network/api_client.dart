@@ -147,13 +147,14 @@ class ApiClient {
     String path, {
     Object? body,
     bool publico = false,
+    Map<String, String>? headers,
     required T Function(dynamic data) parse,
   }) async {
     try {
       final res = await dio.post<dynamic>(
         path,
         data: body,
-        options: _opciones(publico),
+        options: _opciones(publico, headers),
       );
       return Ok<T>(parse(res.data));
     } catch (e) {
@@ -195,7 +196,10 @@ class ApiClient {
   }
 
   /// Marca la peticion como publica para que el `AuthInterceptor` no le anexe
-  /// el token.
-  static Options _opciones(bool publico) =>
-      publico ? Options(extra: const {'public': true}) : Options();
+  /// el token. Los headers extra se usan para `X-Device-Id` del SOS.
+  static Options _opciones(bool publico, [Map<String, String>? headers]) =>
+      Options(
+        extra: publico ? const {'public': true} : null,
+        headers: headers,
+      );
 }
