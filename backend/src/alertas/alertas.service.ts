@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { DataSource } from 'typeorm';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -203,9 +203,74 @@ export class AlertasService {
 
   /** Al cerrar la alerta se cierra tambien la incidencia CRITICA asociada y se libera la unidad. */
   async cambiarEstado(id: string, estado: string, usuarioId: string) {
-    await this.findOne(id);
+    const alerta = await this.findOne(id);
+
+    // ACEPTADA: el sereno toma la alerta con su propia unidad. El cliente nunca
+    // envia unidadId (objetivo general.md:167): se resuelve por
+    // unidades_serenazgo.responsable_id. La restriccion chk_alerta_aceptada exige
+    // aceptada_por, aceptada_en y unidad_id, asi que los tres se escriben juntos.
+    let unidadAceptada: string | null = null;
+    if (estado === 'ACEPTADA') {
+      if (alerta.estado !== 'ACTIVA') {
+        throw new ConflictException('La alerta ya no esta activa.');
+      }
+
+      const unidades = await this.ds.query(
+        `SELECT id, estado FROM unidades_serenazgo
+          WHERE responsable_id = $1 AND eliminado_en IS NULL
+          ORDER BY creado_en`,
+        [usuarioId],
+      );
+      if (unidades.length === 0) {
+        throw new BadRequestException('El sereno no tiene una unidad asignada.');
+      }
+      if (unidades.length > 1) {
+        throw new ConflictException(
+          'El sereno tiene varias unidades asignadas. Pida ayuda al operador.',
+        );
+      }
+
+      const unidad = unidades[0];
+      if (unidad.estado !== 'DISPONIBLE') {
+        throw new ConflictException('La unidad asignada no esta disponible.');
+      }
+      unidadAceptada = unidad.id as string;
+    }
+
+    const terminal = ['ATENDIDA', 'CANCELADA', 'FALSA', 'EXPIRADA'];
 
     await this.ds.transaction(async (m) => {
+      if (estado === 'ACEPTADA') {
+        await m.query(
+          `UPDATE alertas
+              SET estado = 'ACEPTADA',
+                  aceptada_por = $2::uuid,
+                  aceptada_en  = now(),
+                  unidad_id    = $3::uuid
+            WHERE id = $1`,
+          [id, usuarioId, unidadAceptada],
+        );
+
+        await m.query(
+          `UPDATE unidades_serenazgo SET estado = 'OCUPADA' WHERE id = $1`,
+          [unidadAceptada],
+        );
+
+        // La incidencia CRITICA que abrio el SOS pasa a EN_ATENCION con la unidad
+        // del sereno; el trigger fn_historial_estado registra el movimiento.
+        const [a] = await m.query(`SELECT incidencia_id FROM alertas WHERE id = $1`, [id]);
+        if (a?.incidencia_id) {
+          await m.query(
+            `UPDATE incidencias
+                SET estado = 'EN_ATENCION'::estado_incidencia,
+                    unidad_asignada_id = $2::uuid
+              WHERE id = $1 AND estado NOT IN ('ATENDIDA','CANCELADA')`,
+            [a.incidencia_id, unidadAceptada],
+          );
+        }
+        return;
+      }
+
       await m.query(
         `UPDATE alertas SET estado = $2::varchar,
                 atendida_por  = CASE WHEN $2::varchar IN ('ATENDIDA','CANCELADA','FALSA') THEN $3::uuid ELSE atendida_por END,
@@ -216,7 +281,7 @@ export class AlertasService {
       // Al cerrar la alerta se acorta la ventana del token. El token NO se
       // revoca: queda vigente 10 minutos solo para GET /seguimiento. Las peticiones
       // POST /posicion y POST /cancelar rechazan alertas terminales antes de validar el token.
-      if (['ATENDIDA', 'CANCELADA', 'FALSA'].includes(estado)) {
+      if (terminal.includes(estado)) {
         await m.query(
           `UPDATE sessions_anonimas
               SET expira_en = LEAST(expira_en, now() + interval '10 minutes')
@@ -228,7 +293,7 @@ export class AlertasService {
       const [a] = await m.query(`SELECT incidencia_id FROM alertas WHERE id = $1`, [id]);
       if (!a?.incidencia_id) return;
 
-      // ATENDIDA mantiene la incidencia como ATENDIDA; CANCELADA y FALSA la cierran como CANCELADA.
+      // ATENDIDA mantiene la incidencia como ATENDIDA; el resto la cierra como CANCELADA.
       const nuevoEstado = estado === 'ATENDIDA' ? 'ATENDIDA' : 'CANCELADA';
       await m.query(
         `UPDATE incidencias SET estado = $2::estado_incidencia WHERE id = $1 AND estado NOT IN ('ATENDIDA','CANCELADA')`,

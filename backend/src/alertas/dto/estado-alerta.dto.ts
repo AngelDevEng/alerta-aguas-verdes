@@ -2,7 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
-export const ESTADOS_ALERTA = ['ACTIVA', 'ATENDIDA', 'CANCELADA', 'FALSA'] as const;
+export const ESTADOS_ALERTA = [
+  'ACTIVA',
+  'ACEPTADA',
+  'ATENDIDA',
+  'CANCELADA',
+  'FALSA',
+  'EXPIRADA',
+] as const;
 
 export class EstadoAlertaDto {
   @ApiProperty({ enum: ESTADOS_ALERTA })
