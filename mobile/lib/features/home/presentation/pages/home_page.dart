@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/storage/sos_session_store.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../alertas/presentation/bloc/sos_bloc.dart';
 import '../../../alertas/presentation/bloc/sos_event.dart';
@@ -513,6 +514,9 @@ void _llamar(BuildContext context, {required bool comisaria}) {
 /// Dashboard/MainActivity/Login segun rol. Esas pantallas aun no existen
 /// (paridad filas 3 y 9), asi que mientras expone la unica accion de sesion.
 Future<void> _accionesSesion(BuildContext context) async {
+  if (GetIt.I.isRegistered<AuthBloc>()) {
+    GetIt.I<AuthBloc>().add(const AuthLogoutSolicitado());
+  }
   context.go('/login');
 }
 

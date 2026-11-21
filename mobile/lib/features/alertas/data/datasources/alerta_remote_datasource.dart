@@ -20,6 +20,8 @@ abstract interface class AlertaRemoteDataSource {
     required double longitud,
     double? precisionM,
   });
+
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado);
 }
 
 class AlertaRemoteDataSourceImpl implements AlertaRemoteDataSource {
@@ -76,4 +78,17 @@ class AlertaRemoteDataSourceImpl implements AlertaRemoteDataSource {
       publico: true,
     );
   }
+
+  @override
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado) =>
+      _api.patch<Map<String, dynamic>>(
+        '/alertas/$id/estado',
+        body: <String, dynamic>{'estado': estado},
+        parse: (data) {
+          if (data is! Map) {
+            throw const NetworkFailure('Respuesta inesperada del servidor.');
+          }
+          return Map<String, dynamic>.from(data);
+        },
+      );
 }

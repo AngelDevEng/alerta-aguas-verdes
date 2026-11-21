@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/di/injector.dart';
+import '../../../core/error/result.dart';
 import '../../../core/realtime/socket_service.dart';
 import '../../../core/storage/token_store.dart';
+import '../../alertas/domain/usecases/alerta_usecases.dart';
+import '../../auth/presentation/bloc/auth_bloc.dart';
+import '../../auth/presentation/bloc/auth_event.dart';
 
 class PatrulleroDashboardPage extends StatefulWidget {
   const PatrulleroDashboardPage({super.key});
@@ -18,6 +23,7 @@ class _PatrulleroDashboardPageState extends State<PatrulleroDashboardPage> {
   StreamSubscription? _alertaSub;
   List<Map<String, dynamic>> _alertas = [];
   String? _error;
+  bool _accionando = false;
 
   @override
   void initState() {
@@ -54,6 +60,24 @@ class _PatrulleroDashboardPageState extends State<PatrulleroDashboardPage> {
     }
   }
 
+  Future<void> _cambiarEstado(String id, String estado) async {
+    setState(() => _accionando = true);
+    final caso = sl<CambiarEstadoAlertaUseCase>();
+    final r = await caso(id, estado);
+    if (!mounted) return;
+    setState(() => _accionando = false);
+    if (r case Err(:final failure)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(failure.message)),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Alerta $estado')),
+    );
+    _cargar();
+  }
+
   @override
   void dispose() {
     _alertaSub?.cancel();
@@ -67,7 +91,19 @@ class _PatrulleroDashboardPageState extends State<PatrulleroDashboardPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Alertas activas (tiempo real)'),
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _cargar)],
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _cargar),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'logout') {
+                context.read<AuthBloc>().add(const AuthLogoutSolicitado());
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'logout', child: Text('Cerrar sesion')),
+            ],
+          ),
+        ],
       ),
       body: _alertas.isEmpty
           ? const Center(child: Text('No hay alertas activas.'))
@@ -75,10 +111,29 @@ class _PatrulleroDashboardPageState extends State<PatrulleroDashboardPage> {
               itemCount: _alertas.length,
               itemBuilder: (ctx, i) {
                 final a = _alertas[i];
-                return ListTile(
-                  title: Text(a['direccion']?.toString() ?? a['id']?.toString() ?? 'Alerta'),
-                  subtitle: Text('Estado: ${a['estado'] ?? 'ACTIVA'}'),
-                  trailing: const Icon(Icons.warning, color: Colors.red),
+                final id = a['id']?.toString() ?? '';
+                final estado = a['estado']?.toString() ?? 'ACTIVA';
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: ListTile(
+                    title: Text(a['direccion']?.toString() ?? id),
+                    subtitle: Text('Estado: $estado'),
+                    trailing: estado == 'ACTIVA' && !_accionando
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.check, color: Colors.green),
+                                onPressed: () => _cambiarEstado(id, 'ACEPTADA'),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close, color: Colors.red),
+                                onPressed: () => _cambiarEstado(id, 'CANCELADA'),
+                              ),
+                            ],
+                          )
+                        : null,
+                  ),
                 );
               },
             ),

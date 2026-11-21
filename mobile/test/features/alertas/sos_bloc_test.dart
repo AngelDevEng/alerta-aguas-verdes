@@ -61,6 +61,10 @@ class _AlertasFake implements AlertaRepository {
     if (falla != null) return Err(falla!);
     return const Ok(AlertaSos(alertaId: 'alerta-1', sessionToken: 'token-1'));
   }
+
+  @override
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado) async =>
+      Ok({'id': id, 'estado': estado});
 }
 
 void main() {

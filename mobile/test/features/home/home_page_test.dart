@@ -108,6 +108,10 @@ class _AlertasFalsa implements AlertaRepository {
     latitudEnviada = latitud;
     return const Ok(AlertaSos(alertaId: 'alerta-1', sessionToken: 'token-1'));
   }
+
+  @override
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado) async =>
+      Ok({'id': id, 'estado': estado});
 }
 
 const _admin = Usuario(

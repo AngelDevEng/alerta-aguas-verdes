@@ -55,27 +55,36 @@ class LocationService {
       if (permiso == LocationPermission.denied) {
         permiso = await Geolocator.requestPermission();
       }
-      if (permiso == LocationPermission.denied) {
-        return const Err<PosicionActual>(
-          LocalFailure('Sin permiso de ubicacion. Activalo en Ajustes para reportar.'),
-        );
-      }
       if (permiso == LocationPermission.deniedForever) {
+        await Geolocator.openAppSettings();
         return const Err<PosicionActual>(
           LocalFailure(
             'El permiso de ubicacion esta bloqueado. Habilitalo desde Ajustes.',
           ),
         );
       }
+      if (permiso == LocationPermission.denied) {
+        return const Err<PosicionActual>(
+          LocalFailure('Sin permiso de ubicacion. Activalo en Ajustes para reportar.'),
+        );
+      }
 
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          // Precision de GPS de verdad: para reportar un hecho en la calle
-          // conviene tardar un par de segundos a entregar 5 m en vez de 80.
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 20),
-        ),
-      );
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 45),
+          ),
+        );
+      } on TimeoutException {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 20),
+          ),
+        );
+      }
 
       return Ok<PosicionActual>(
         PosicionActual(

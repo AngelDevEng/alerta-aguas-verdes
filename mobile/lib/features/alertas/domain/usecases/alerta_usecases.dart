@@ -44,3 +44,13 @@ class EnviarSosUseCase {
     );
   }
 }
+
+/// Cambia el estado de una alerta (ACEPTADA, ATENDIDA, CANCELADA, FALSA).
+class CambiarEstadoAlertaUseCase {
+  const CambiarEstadoAlertaUseCase(this._repo);
+
+  final AlertaRepository _repo;
+
+  Future<Result<Map<String, dynamic>>> call(String id, String estado) =>
+      _repo.cambiarEstado(id, estado);
+}

@@ -15,4 +15,6 @@ abstract interface class AlertaRepository {
     required double longitud,
     double? precisionM,
   });
+
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado);
 }

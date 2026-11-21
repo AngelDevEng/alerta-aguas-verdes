@@ -202,6 +202,7 @@ Future<void> configureDependencies() async {
     () => AlertaRepositoryImpl(sl<AlertaRemoteDataSource>()),
   );
   sl.registerFactory(() => EnviarSosUseCase(sl<AlertaRepository>()));
+  sl.registerFactory(() => CambiarEstadoAlertaUseCase(sl<AlertaRepository>()));
   // Factory: cada apertura del home arranca sin el estado del envio anterior.
   sl.registerFactory(() => SosBloc(sl<LocationService>(), sl<EnviarSosUseCase>()));
 
