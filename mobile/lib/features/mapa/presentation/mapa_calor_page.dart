@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/maps/map_tiles.dart';
 import '../../../core/storage/token_store.dart';
 
 class MapaCalorPage extends StatefulWidget {
@@ -17,6 +18,10 @@ class _MapaCalorPageState extends State<MapaCalorPage> {
   final _desde = TextEditingController();
   final _hasta = TextEditingController();
   final _tipo = TextEditingController();
+
+  /// Capa base creada una sola vez: recrearla en cada rebuild multiplica las
+  /// peticiones de tiles y el riesgo de 403/429 del proveedor.
+  late final TileLayer _capaBase = MapTiles.capaBase();
 
   @override
   void initState() {
@@ -57,7 +62,7 @@ class _MapaCalorPageState extends State<MapaCalorPage> {
             child: FlutterMap(
               options: const MapOptions(initialCenter: LatLng(-3.5, -80.3), initialZoom: 13),
               children: [
-                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                _capaBase,
                 MarkerLayer(
                   markers: _zonas.map((z) => Marker(
                     point: LatLng((z['lat'] as num).toDouble(), (z['lng'] as num).toDouble()),
@@ -65,6 +70,7 @@ class _MapaCalorPageState extends State<MapaCalorPage> {
                     child: Container(color: Colors.red.withValues(alpha: 0.5)),
                   )).toList(),
                 ),
+                MapTiles.atribucionWidget(),
               ],
             ),
           ),

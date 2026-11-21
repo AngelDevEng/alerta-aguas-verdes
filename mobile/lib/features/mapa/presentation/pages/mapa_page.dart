@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../../core/maps/map_tiles.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../incidencias/domain/entities/incidencia.dart';
 import '../../../incidencias/domain/entities/incidencia_mapa.dart';
@@ -45,8 +46,9 @@ class _MapaPageState extends State<MapaPage> {
   /// exacta sin perder el entorno inmediato.
   static const _zoomMiPosicion = 16.0;
 
-  /// Tile source de OSM, la misma MAPNIK que usa el legacy.
-  static const _tiles = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  /// Capa base centralizada (User-Agent propio + caché + MapTiler/OSM).
+  /// Se crea una sola vez para no multiplicar peticiones en cada rebuild.
+  late final TileLayer _capaBase = MapTiles.capaBase();
 
   final MapController _mapa = MapController();
 
@@ -102,17 +104,9 @@ class _MapaPageState extends State<MapaPage> {
                 ),
               ),
               children: [
-                TileLayer(
-                  urlTemplate: _tiles,
-                  // Politica de uso de tile.openstreetmap.org: identificar la
-                  // app en el User-Agent. Sin esto el tile server puede banear.
-                  userAgentPackageName: 'pe.gob.municaguasverdes.app',
-                  maxZoom: 19,
-                ),
+                _capaBase,
                 MarkerLayer(markers: _marcadores(state)),
-                const SimpleAttributionWidget(
-                  source: Text('© Colaboradores de OpenStreetMap'),
-                ),
+                MapTiles.atribucionWidget(),
               ],
             ),
             if (state is MapaInicial || state is MapaCargando)

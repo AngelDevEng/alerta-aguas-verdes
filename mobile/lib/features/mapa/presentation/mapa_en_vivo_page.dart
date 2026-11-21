@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../core/maps/map_tiles.dart';
 import '../../../core/realtime/socket_service.dart';
 
 class MapaEnVivoPage extends StatefulWidget {
@@ -13,6 +14,10 @@ class MapaEnVivoPage extends StatefulWidget {
 
 class _MapaEnVivoPageState extends State<MapaEnVivoPage> {
   final Map<String, LatLng> _positions = {};
+
+  /// Capa base creada una sola vez: el socket reconstruye el widget con cada
+  /// posicion y recrear el `TileLayer` multiplicaria las peticiones de tiles.
+  late final TileLayer _capaBase = MapTiles.capaBase();
 
   @override
   void initState() {
@@ -34,7 +39,7 @@ class _MapaEnVivoPageState extends State<MapaEnVivoPage> {
       body: FlutterMap(
         options: const MapOptions(initialCenter: LatLng(-3.5, -80.3), initialZoom: 13),
         children: [
-          TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+          _capaBase,
           MarkerLayer(
             markers: _positions.entries
                 .map((e) => Marker(
@@ -45,6 +50,7 @@ class _MapaEnVivoPageState extends State<MapaEnVivoPage> {
                     ))
                 .toList(),
           ),
+          MapTiles.atribucionWidget(),
         ],
       ),
     );

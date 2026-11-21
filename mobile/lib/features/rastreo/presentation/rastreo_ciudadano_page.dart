@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:get_it/get_it.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/maps/map_tiles.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/sos_session_store.dart';
 
@@ -38,6 +39,10 @@ class _RastreoCiudadanoPageState extends State<RastreoCiudadanoPage> {
   Map<String, dynamic>? _sereno;
   List<dynamic> _puntosCiudadano = [];
   String? _error;
+
+  /// Capa base creada una sola vez: el polling cada 5 s reconstruye el widget,
+  /// y recrear el `TileLayer` en cada rebuild dispara peticiones de tiles.
+  late final TileLayer _capaBase = MapTiles.capaBase();
 
   Dio? get _dio => GetIt.I.isRegistered<ApiClient>()
       ? GetIt.I<ApiClient>().dio
@@ -174,9 +179,7 @@ class _RastreoCiudadanoPageState extends State<RastreoCiudadanoPage> {
                 initialZoom: todos.isNotEmpty ? 15 : 13,
               ),
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                ),
+                _capaBase,
                 MarkerLayer(
                   markers: [
                     ...puntosCiudadano.map(
@@ -204,6 +207,7 @@ class _RastreoCiudadanoPageState extends State<RastreoCiudadanoPage> {
                       ),
                   ],
                 ),
+                MapTiles.atribucionWidget(),
               ],
             ),
           ),
