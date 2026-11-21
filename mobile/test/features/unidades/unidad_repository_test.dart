@@ -25,6 +25,9 @@ class _RemoteFalso implements UnidadRemoteDataSource {
   Future<Result<List<Unidad>>> listar() async => respuesta;
 
   @override
+  Future<Result<List<Unidad>>> buscarPorPlaca(String placa) async => respuesta;
+
+  @override
   Future<Result<List<UnidadCercana>>> cercanas({
     required double longitud,
     required double latitud,

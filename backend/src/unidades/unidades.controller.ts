@@ -6,6 +6,7 @@ import { CercanasQueryDto, EstadoUnidadDto, RastroQueryDto, UbicacionDto } from 
 import { AsignarResponsableDto } from './dto/asignar-responsable.dto';
 import { UpdateUnidadDto } from './dto/update-unidad.dto';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuarioAutenticado } from '../common/types';
 
@@ -26,7 +27,7 @@ export class UnidadesController {
 
   // El listado operativo solo expone campos minimos, sin DNI (ver service).
   // DIRECTIVO no los necesita: el seguimiento de flota es operativo.
-  @Roles('SERENO', 'OPERADOR', 'ADMIN')
+  @Public()
   @Get() findAll(@Query('placa') placa?: string) { return this.svc.findAll(placa); }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')

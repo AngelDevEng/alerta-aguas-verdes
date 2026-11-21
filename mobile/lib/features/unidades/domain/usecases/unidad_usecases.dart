@@ -15,6 +15,15 @@ class ListarUnidadesUseCase {
   Future<Result<List<Unidad>>> call() => _repo.listar();
 }
 
+/// Busca unidades por placa (`GET /unidades?placa=`).
+class BuscarUnidadPorPlacaUseCase {
+  const BuscarUnidadPorPlacaUseCase(this._repo);
+
+  final UnidadRepository _repo;
+
+  Future<Result<List<Unidad>>> call(String placa) => _repo.buscarPorPlaca(placa);
+}
+
 /// Unidades que se pueden asignar a una incidencia.
 ///
 /// El filtro por `DISPONIBLE` vive en el repositorio, asi que esta pantalla no

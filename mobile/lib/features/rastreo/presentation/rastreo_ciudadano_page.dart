@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:get_it/get_it.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/sos_session_store.dart';
@@ -134,32 +136,102 @@ class _RastreoCiudadanoPageState extends State<RastreoCiudadanoPage> {
       );
     }
 
+    final puntosCiudadano = _puntosCiudadano
+        .where((p) => p is Map && p['latitud'] != null && p['longitud'] != null)
+        .map((p) => LatLng(
+              (p['latitud'] as num).toDouble(),
+              (p['longitud'] as num).toDouble(),
+            ))
+        .toList();
+
+    final sereno = _sereno;
+    final latSereno = sereno?['latitud'];
+    final lonSereno = sereno?['longitud'];
+    final posicionSereno = (latSereno != null && lonSereno != null)
+        ? LatLng((latSereno as num).toDouble(), (lonSereno as num).toDouble())
+        : null;
+
+    final todos = <LatLng>[...puntosCiudadano];
+    if (posicionSereno != null) todos.add(posicionSereno);
+
+    final centro = todos.isNotEmpty
+        ? LatLng(
+            todos.map((e) => e.latitude).reduce((a, b) => a + b) /
+                todos.length,
+            todos.map((e) => e.longitude).reduce((a, b) => a + b) /
+                todos.length,
+          )
+        : const LatLng(-3.4825, -80.245);
+
     return Scaffold(
       appBar: AppBar(title: Text(titulo)),
-      body: _sereno == null
-          ? const Center(child: Text('Esperando asignacion de unidad...'))
-          : ListView(
+      body: Column(
+        children: [
+          Expanded(
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: centro,
+                initialZoom: todos.isNotEmpty ? 15 : 13,
+              ),
               children: [
-                ListTile(
-                  leading: const Icon(Icons.local_police),
-                  title: Text('Unidad ${_unidadId ?? ''}'),
-                  subtitle: Text(
-                    '${_sereno!['latitud'] ?? '?'}, ${_sereno!['longitud'] ?? '?'}',
-                  ),
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 ),
-                const Divider(),
-                const ListTile(
-                  title: Text('Mi ubicacion reportada'),
-                  subtitle: Text('Se comparte cuando un sereno acepta.'),
-                ),
-                ..._puntosCiudadano.map(
-                  (p) => ListTile(
-                    title: Text('${p['latitud']}, ${p['longitud']}'),
-                    subtitle: Text('${p['registradoEn'] ?? ''}'),
-                  ),
+                MarkerLayer(
+                  markers: [
+                    ...puntosCiudadano.map(
+                      (p) => Marker(
+                        point: p,
+                        width: 24,
+                        height: 24,
+                        child: const Icon(
+                          Icons.person_pin,
+                          color: Colors.green,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                    if (posicionSereno != null)
+                      Marker(
+                        point: posicionSereno,
+                        width: 30,
+                        height: 30,
+                        child: const Icon(
+                          Icons.local_police,
+                          color: Colors.blue,
+                          size: 30,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
+          ),
+          if (_sereno == null)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                'Esperando asignacion de unidad...',
+                style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.local_police, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Unidad ${_unidadId ?? ''} en ruta',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

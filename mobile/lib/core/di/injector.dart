@@ -188,6 +188,9 @@ Future<void> configureDependencies() async {
     () => ListarUnidadesDespachablesUseCase(sl<UnidadRepository>()),
   );
   sl.registerFactory(
+    () => BuscarUnidadPorPlacaUseCase(sl<UnidadRepository>()),
+  );
+  sl.registerFactory(
     () => ListarUnidadesCercanasUseCase(sl<UnidadRepository>()),
   );
 

@@ -24,6 +24,8 @@ import '../models/unidad_dto.dart';
 abstract interface class UnidadRemoteDataSource {
   Future<Result<List<Unidad>>> listar();
 
+  Future<Result<List<Unidad>>> buscarPorPlaca(String placa);
+
   Future<Result<List<UnidadCercana>>> cercanas({
     required double longitud,
     required double latitud,
@@ -39,6 +41,17 @@ class UnidadRemoteDataSourceImpl implements UnidadRemoteDataSource {
   @override
   Future<Result<List<Unidad>>> listar() => _api.get<List<Unidad>>(
         '/unidades',
+        parse: (data) => aListaDeMapas(data)
+            .map(UnidadDto.fromJson)
+            .map((d) => d.toEntity())
+            .toList(growable: false),
+      );
+
+  @override
+  Future<Result<List<Unidad>>> buscarPorPlaca(String placa) =>
+      _api.get<List<Unidad>>(
+        '/unidades',
+        query: <String, dynamic>{'placa': placa},
         parse: (data) => aListaDeMapas(data)
             .map(UnidadDto.fromJson)
             .map((d) => d.toEntity())

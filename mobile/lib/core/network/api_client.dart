@@ -13,9 +13,9 @@ class ApiClient {
       : dio = dio ?? Dio() {
     this.dio.options = BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 20),
-      sendTimeout: const Duration(seconds: 30),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
+      sendTimeout: const Duration(seconds: 60),
       headers: {'Content-Type': 'application/json'},
       // Render y Supabase presentan certificados validos; si se usa un
       // certificado autofirmado en staging, extraer la excepcion aqui.

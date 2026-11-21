@@ -8,6 +8,7 @@ import { EstadisticasQueryDto } from './dto/estadisticas-query.dto';
 import { CambiarEstadoDto } from './dto/cambiar-estado.dto';
 import { AsignarUnidadDto } from './dto/asignar-unidad.dto';
 import { Roles } from '../common/decorators/roles.decorator';
+import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuarioAutenticado } from '../common/types';
 
@@ -17,10 +18,10 @@ import { UsuarioAutenticado } from '../common/types';
 export class IncidenciasController {
   constructor(private readonly svc: IncidenciasService) {}
 
-  // Un ciudadano puede reportar; un sereno tambien. El USER id queda registrado como reportado_por.
-  @Roles('CIUDADANO', 'SERENO', 'OPERADOR', 'ADMIN')
-  @Post() create(@Body() dto: CreateIncidenciaDto, @CurrentUser() u: UsuarioAutenticado) {
-    return this.svc.create(dto, u.id);
+  // Ciudadano sin cuenta puede reportar (u es undefined); con sesion queda registrado.
+  @Public()
+  @Post() create(@Body() dto: CreateIncidenciaDto, @CurrentUser() u?: UsuarioAutenticado) {
+    return this.svc.create(dto, u?.id);
   }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')

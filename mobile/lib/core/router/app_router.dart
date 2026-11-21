@@ -78,6 +78,15 @@ class AppRouter {
   static const _rutasProtegidas = <String>{
     Rutas.mapa,
     Rutas.incidencias,
+    Rutas.patrullero,
+  };
+
+  /// Rutas que el ciudadano sin sesion si puede abrir (pblicas).
+  static const _rutasPublicas = <String>{
+    Rutas.login,
+    Rutas.home,
+    Rutas.emergencias,
+    Rutas.reportar,
   };
 
   /// Si la ruta cae dentro de una zona que exige rol operativo.
@@ -171,8 +180,8 @@ class AppRouter {
       final enLogin = destino == Rutas.login;
 
       if (usuario == null) {
-        // Sin sesión: se permite el login y el home (launcher ciudadano).
-        if (enLogin || destino == Rutas.home) return null;
+        // Sin sesión: login, home (launcher ciudadano) y emergencias (pblicas).
+        if (_rutasPublicas.contains(destino)) return null;
         return Rutas.login;
       }
       // Con sesión: no quedarse en el login.

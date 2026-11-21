@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/router/app_router.dart';
 import '../../../../core/storage/sos_session_store.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../../alertas/presentation/bloc/sos_bloc.dart';
 import '../../../alertas/presentation/bloc/sos_event.dart';
 import '../../../alertas/presentation/bloc/sos_state.dart';
@@ -13,6 +15,7 @@ import '../../../rastreo/presentation/rastreo_ciudadano_page.dart';
 import '../../../catalogos/presentation/bloc/catalogos_bloc.dart';
 import '../../../catalogos/presentation/bloc/catalogos_event.dart';
 import '../../../catalogos/presentation/bloc/catalogos_state.dart';
+import '../../../unidades/presentation/pages/buscar_placa_page.dart';
 
 /// Home: launcher de panico, 1:1 con `Activity_Panico_Main` +
 /// `activity_panico_main.xml` del legacy Java (referencia canonica desde
@@ -150,10 +153,7 @@ class _LanzadorPanico extends StatelessWidget {
               ),
               const _PieBusqueda(),
               const _SosReanudarBoton(),
-              TextButton(
-                onPressed: () => context.go('/patrullero'),
-                child: const Text('Panel operador (alertas activas)'),
-              ),
+              const _PanelOperadorBoton(),
             ],
           ),
         ),
@@ -456,9 +456,9 @@ class _PieBusquedaState extends State<_PieBusqueda> {
             label: 'Buscar placa',
             child: InkWell(
               key: const Key('menu_buscar'),
-              // La pantalla de resultados (Activity_Buscar_Placa) es la fila
-              // 6 de la matriz de paridad: todavia no existe.
-              onTap: () => _pendiente(context, 'La busqueda por placa'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const BuscarPlacaPage()),
+              ),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -517,16 +517,35 @@ Future<void> _accionesSesion(BuildContext context) async {
 }
 
 /// Aviso de funcion pendiente (mismo texto del menu anterior).
-void _pendiente(BuildContext context, String funcion) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text('$funcion: funcionalidad en preparacion')));
-}
-
 void _snack(BuildContext context, String mensaje) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(mensaje)));
+}
+
+/// Boton que lleva al dashboard del patrullero. Solo visible para roles
+/// operativos (SERENO/OPERADOR/ADMIN/DIRECTIVO); el ciudadano no lo ve.
+class _PanelOperadorBoton extends StatelessWidget {
+  const _PanelOperadorBoton();
+
+  @override
+  Widget build(BuildContext context) {
+    if (!GetIt.I.isRegistered<AuthBloc>()) return const SizedBox.shrink();
+    return BlocProvider<AuthBloc>.value(
+      value: GetIt.I<AuthBloc>(),
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          if (state is! AuthAutenticado) return const SizedBox.shrink();
+          final u = state.usuario;
+          if (u.esCiudadano) return const SizedBox.shrink();
+          return TextButton(
+            onPressed: () => context.go(Rutas.patrullero),
+            child: const Text('Panel operador (alertas activas)'),
+          );
+        },
+      ),
+    );
+  }
 }
 
 /// Reanuda el seguimiento si el ciudadano ya tenia una SOS activa guardada.

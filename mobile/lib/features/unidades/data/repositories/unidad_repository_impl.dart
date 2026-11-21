@@ -12,6 +12,10 @@ class UnidadRepositoryImpl implements UnidadRepository {
   Future<Result<List<Unidad>>> listar() => _remote.listar();
 
   @override
+  Future<Result<List<Unidad>>> buscarPorPlaca(String placa) =>
+      _remote.buscarPorPlaca(placa);
+
+  @override
   Future<Result<List<UnidadCercana>>> cercanas({
     required double longitud,
     required double latitud,

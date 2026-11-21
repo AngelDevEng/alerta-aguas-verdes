@@ -18,6 +18,8 @@ abstract interface class UnidadRepository {
 
   Future<Result<List<Unidad>>> listar();
 
+  Future<Result<List<Unidad>>> buscarPorPlaca(String placa);
+
   /// Unidades dentro de un radio de [radioM] alrededor del punto, ordenadas por
   /// distancia de mas cerca a mas lejos (el backend ya las ordena).
   Future<Result<List<UnidadCercana>>> cercanas({
