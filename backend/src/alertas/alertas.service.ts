@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { DataSource } from 'typeorm';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -9,6 +9,7 @@ const SELECT_BASE = `
          a.aceptada_por AS "aceptadaPor", a.aceptada_en AS "aceptadaEn",
          a.unidad_id AS "unidadId", a.expira_en AS "expiraEn",
          a.atendida_en AS "atendidaEn", a.precision_m AS "precisionM",
+         a.sin_ubicacion AS "sinUbicacion",
          ST_Y(a.ubicacion::geometry) AS latitud, ST_X(a.ubicacion::geometry) AS longitud,
          a.incidencia_id AS "incidenciaId", i.codigo AS "incidenciaCodigo",
          i.unidad_asignada_id AS "unidadAsignadaId",
@@ -21,8 +22,39 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** SHA-256 hex de la `Idempotency-Key` del cliente. Nunca se guarda en claro. */
+function hashClave(clave: string): string {
+  return createHash('sha256').update(clave).digest('hex');
+}
+
+/**
+ * SHA-256 del cuerpo canonico del SOS. Permite detectar una misma clave
+ * reutilizada con datos distintos (no deberia pasar: la clave es un UUID
+ * aleatorio por envio).
+ */
+function hashSolicitud(dto: CreateAlertaDto): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        latitud: dto.latitud,
+        longitud: dto.longitud,
+        telefono: dto.telefono ?? null,
+        direccion: dto.direccion ?? null,
+        precisionM: dto.precisionM ?? null,
+        origen: dto.origen ?? 'APP',
+        sinUbicacion: dto.sinUbicacion ?? false,
+      }),
+    )
+    .digest('hex');
+}
+
+/** Estados a partir de los cuales la alerta ya no admite seguimiento. */
+const ESTADOS_TERMINALES = ['ATENDIDA', 'CANCELADA', 'FALSA', 'EXPIRADA'];
+
 @Injectable()
 export class AlertasService {
+  private readonly logger = new Logger(AlertasService.name);
+
   constructor(
     private readonly ds: DataSource,
     private readonly realtime: RealtimeService,
@@ -35,14 +67,43 @@ export class AlertasService {
    *
    * Una sola SOS viva por dispositivo: si ya hay una ACTIVA/ACEPTADA con ese
    * dispositivo_id se devuelve esa (con un token de sesion nuevo), no se crea
-   * otra. El token se guarda hasheado y se devuelve una sola vez en el cuerpo.
+   * otra.
+   *
+   * Idempotencia: si llega `idempotencyKey` y ya existe una fila para esa clave
+   * con el MISMO dispositivo, se devuelve la alerta original sin crear otra.
+   * Asi un reintento (mala señal, timeout, reanudar la app) no duplica la SOS.
    */
-  async crear(dto: CreateAlertaDto, reportanteId?: string, dispositivoId?: string, ip?: string) {
+  async crear(
+    dto: CreateAlertaDto,
+    reportanteId?: string,
+    dispositivoId?: string,
+    ip?: string,
+    idempotencyKey?: string,
+  ) {
     const dispositivo = dispositivoId?.trim() || null;
+    const clave = idempotencyKey?.trim() || null;
+    const claveHash = clave ? hashClave(clave) : null;
+    const solicitudHash = hashSolicitud(dto);
+
+    // Limpieza best-effort de claves vencidas. No se bloquea el envio por esto.
+    void this.limpiarIdempotenciaExpirada();
+
+    // 1. Reintento idempotente: misma clave + mismo dispositivo -> alerta original.
+    if (claveHash) {
+      const previa = await this.idempotenciaPorClave(claveHash);
+      if (previa && previa.dispositivo_id === dispositivo) {
+        return this.entregarAlerta(previa.alerta_id as string, dispositivo, ip);
+      }
+    }
 
     if (dispositivo) {
       const existente = await this.alertaVivaPorDispositivo(dispositivo);
       if (existente) {
+        // La SOS viva se reutiliza; si vino clave, se vincula a ella para que un
+        // reintento posterior con la misma clave tambien la encuentre.
+        if (claveHash) {
+          await this.vincularIdempotencia(claveHash, solicitudHash, existente.id, dispositivo);
+        }
         const sessionToken = await this.nuevaSesion(existente.id as string, dispositivo, ip);
         return { ...(await this.findOne(existente.id as string)), sessionToken };
       }
@@ -51,13 +112,27 @@ export class AlertasService {
     const token = randomBytes(32).toString('base64url');
 
     try {
-      const alertaId = await this.insertarAlerta(dto, reportanteId, dispositivo, hashToken(token), ip);
+      const alertaId = await this.insertarAlerta(
+        dto,
+        reportanteId,
+        dispositivo,
+        hashToken(token),
+        ip,
+        claveHash,
+        solicitudHash,
+      );
       const alerta = await this.findOne(alertaId);
       this.realtime.notificarNuevaAlerta(alerta);
       return { ...alerta, sessionToken: token };
     } catch (e: any) {
-      // Carrera con otra peticion del mismo dispositivo: el indice unico rechazo
-      // la segunda alta. Se devuelve la que gano, con un token nuevo.
+      // Carrera con otra peticion: el indice unico rechazo la segunda alta.
+      // Se devuelve la que gano.
+      if (e?.code === '23505' && claveHash) {
+        const previa = await this.idempotenciaPorClave(claveHash);
+        if (previa && previa.dispositivo_id === dispositivo) {
+          return this.entregarAlerta(previa.alerta_id as string, dispositivo, ip);
+        }
+      }
       if (e?.code === '23505' && dispositivo) {
         const existente = await this.alertaVivaPorDispositivo(dispositivo);
         if (existente) {
@@ -66,6 +141,94 @@ export class AlertasService {
         }
       }
       throw e;
+    }
+  }
+
+  /**
+   * Respuesta de una alerta ya existente (reintento idempotente o SOS viva).
+   * Si la alerta ya cerro, se devuelve sin token: no tiene sentido abrir una
+   * sesion de seguimiento para una alerta terminal.
+   */
+  private async entregarAlerta(alertaId: string, dispositivo: string | null, ip?: string) {
+    const alerta = await this.findOne(alertaId);
+    if (ESTADOS_TERMINALES.includes(alerta.estado)) return alerta;
+    const sessionToken = await this.nuevaSesion(alertaId, dispositivo, ip);
+    return { ...alerta, sessionToken };
+  }
+
+  /**
+   * Reintento idempotente: misma clave + mismo dispositivo -> alerta original.
+   *
+   * Si la tabla no existe (SQLSTATE 42P01) se registra una advertencia y se
+   * degrada a "sin idempotencia". Cualquier otro error se registra con detalle
+   * y tambien se degrada: el SOS nunca debe fallar por esta capa.
+   */
+  private async idempotenciaPorClave(claveHash: string) {
+    try {
+      const [row] = await this.ds.query(
+        `SELECT alerta_id, dispositivo_id
+           FROM alertas_idempotencia
+          WHERE clave_hash = $1
+          LIMIT 1`,
+        [claveHash],
+      );
+      return row ?? null;
+    } catch (e: any) {
+      if (e?.code === '42P01') {
+        this.logger.warn(
+          'Tabla alertas_idempotencia no existe (SQLSTATE 42P01). Se degrada a sin idempotencia; aplica la migracion 09.',
+        );
+      } else {
+        this.logger.error(
+          `Fallo al consultar alertas_idempotencia; se degrada a sin idempotencia: ${e?.message ?? e}`,
+          e?.stack,
+        );
+      }
+      return null;
+    }
+  }
+
+  private async vincularIdempotencia(
+    claveHash: string,
+    solicitudHash: string,
+    alertaId: string,
+    dispositivo: string | null,
+  ) {
+    try {
+      await this.ds.query(
+        `INSERT INTO alertas_idempotencia (clave_hash, solicitud_hash, alerta_id, dispositivo_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (clave_hash) DO NOTHING`,
+        [claveHash, solicitudHash, alertaId, dispositivo],
+      );
+    } catch (e: any) {
+      if (e?.code === '42P01') {
+        this.logger.warn(
+          'Tabla alertas_idempotencia no existe (SQLSTATE 42P01). No se vincula la clave; aplica la migracion 09.',
+        );
+      } else {
+        this.logger.error(
+          `Fallo al vincular idempotencia; el SOS se crea igual: ${e?.message ?? e}`,
+          e?.stack,
+        );
+      }
+    }
+  }
+
+  private async limpiarIdempotenciaExpirada() {
+    try {
+      await this.ds.query(`DELETE FROM alertas_idempotencia WHERE expira_en < now()`);
+    } catch (e: any) {
+      if (e?.code === '42P01') {
+        this.logger.warn(
+          'Tabla alertas_idempotencia no existe (SQLSTATE 42P01). No se limpia; aplica la migracion 09.',
+        );
+      } else {
+        this.logger.error(
+          `Fallo al limpiar idempotencia expirada: ${e?.message ?? e}`,
+          e?.stack,
+        );
+      }
     }
   }
 
@@ -86,7 +249,20 @@ export class AlertasService {
     dispositivo: string | null,
     tokenHash: string,
     ip: string | undefined,
+    claveHash?: string | null,
+    solicitudHash?: string,
   ) {
+    // Sin ubicacion: la alerta se crea igual. Se conservan las coordenadas que
+    // lleguen (p. ej. la ultima conocida) pero se marca la direccion y se
+    // omite la precision para no dar una precision enganosa. Si no llegaron
+    // coordenadas (sinUbicacion), se insertan 0,0: la columna `ubicacion` es
+    // NOT NULL y la marca `sin_ubicacion` es la que indica que no son fiables.
+    const sinUbicacion = dto.sinUbicacion === true;
+    const direccion = sinUbicacion ? 'Sin ubicación' : dto.direccion ?? null;
+    const precisionM = sinUbicacion ? null : dto.precisionM ?? null;
+    const latitud = dto.latitud ?? 0;
+    const longitud = dto.longitud ?? 0;
+
     return this.ds.transaction(async (m) => {
       const [inc] = await m.query(
         `INSERT INTO incidencias (tipo_id, descripcion, prioridad, ubicacion, referencia, reportado_por)
@@ -94,22 +270,45 @@ export class AlertasService {
                  $1, 'CRITICA',
                  ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4, $5)
          RETURNING id`,
-        [`Alerta SOS ${dto.origen ?? 'APP'}`, dto.longitud, dto.latitud,
-         dto.direccion ?? null, reportanteId ?? null]);
+        [`Alerta SOS ${dto.origen ?? 'APP'}`, longitud, latitud,
+         direccion, reportanteId ?? null]);
 
       const [a] = await m.query(
         `INSERT INTO alertas
-           (incidencia_id, reportante_id, telefono, ubicacion, direccion, precision_m, origen, dispositivo_id, expira_en)
+           (incidencia_id, reportante_id, telefono, ubicacion, direccion, precision_m, origen, dispositivo_id, expira_en, sin_ubicacion)
          VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7, COALESCE($8, 'APP'), $9,
-                 now() + interval '20 minutes')
+                 now() + interval '20 minutes', $10)
          RETURNING id`,
-        [inc.id, reportanteId ?? null, dto.telefono ?? null, dto.longitud, dto.latitud,
-         dto.direccion ?? null, dto.precisionM ?? null, dto.origen ?? null, dispositivo]);
+        [inc.id, reportanteId ?? null, dto.telefono ?? null, longitud, latitud,
+         direccion, precisionM, dto.origen ?? null, dispositivo, sinUbicacion]);
 
       await m.query(
         `INSERT INTO sessions_anonimas (alerta_id, token_hash, dispositivo_id, ip, expira_en)
          VALUES ($1, $2, $3, $4, now() + interval '24 hours')`,
         [a.id, tokenHash, dispositivo, ip ?? null]);
+
+      if (claveHash) {
+        try {
+          await m.query(
+            `INSERT INTO alertas_idempotencia (clave_hash, solicitud_hash, alerta_id, dispositivo_id)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (clave_hash) DO NOTHING`,
+            [claveHash, solicitudHash ?? '', a.id, dispositivo],
+          );
+        } catch (e: any) {
+          // La alerta ya se inserto; la deduplicacion es best-effort.
+          if (e?.code === '42P01') {
+            this.logger.warn(
+              'Tabla alertas_idempotencia no existe (SQLSTATE 42P01). La alerta se creo sin deduplicar por clave; aplica la migracion 09.',
+            );
+          } else {
+            this.logger.error(
+              `Fallo al registrar la clave de idempotencia; la alerta se creo igual: ${e?.message ?? e}`,
+              e?.stack,
+            );
+          }
+        }
+      }
 
       return a.id as string;
     });

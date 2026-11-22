@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { AlertasService } from './alertas.service';
 import { CreateAlertaDto } from './dto/create-alerta.dto';
 import { EstadoAlertaDto, ListarAlertasQueryDto } from './dto/estado-alerta.dto';
@@ -21,17 +21,24 @@ export class AlertasController {
    *
    * `X-Device-Id` permite una sola SOS activa por dispositivo; `X-Session-Token`
    * no se recibe aca: el token viaja en el cuerpo de la respuesta.
+   *
+   * `Idempotency-Key` (opcional) hace que un reintento con la misma clave y el
+   * mismo `X-Device-Id` devuelva la alerta ya creada en vez de duplicarla. La
+   * clave debe ser estable por envio (UUID v4) y distinta en cada SOS nueva.
    */
   @Public()
   @UseGuards(RateLimitGuard)
+  @ApiHeader({ name: 'X-Device-Id', required: false, description: 'Identificador estable del dispositivo.' })
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'Clave estable por envio; un reintento devuelve la alerta original.' })
   @Post()
   crear(
     @Body() dto: CreateAlertaDto,
     @Headers('x-device-id') dispositivoId?: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
     @Ip() ip?: string,
     @CurrentUser() u?: UsuarioAutenticado,
   ) {
-    return this.svc.crear(dto, u?.id, dispositivoId, ip);
+    return this.svc.crear(dto, u?.id, dispositivoId, ip, idempotencyKey);
   }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')

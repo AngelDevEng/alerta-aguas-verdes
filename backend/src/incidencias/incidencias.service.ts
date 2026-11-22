@@ -133,6 +133,9 @@ export class IncidenciasService {
    * `tipo_mas_comun` sale de `mode()` sobre el nombre de tipo dentro de la
    * celda. Umbrales visuales: 1-3 amarillo, 4-8 naranja, 9+ rojo (ver
    * docs/MAPABASE.md).
+   *
+   * Se excluyen las incidencias abiertas por un SOS sin ubicacion: sus
+   * coordenadas son 0,0 (no fiables) y pintarian un punto falso en el golfo.
    */
   async zonasCalor(q: ZonasCalorQueryDto) {
     const params: any[] = [];
@@ -150,7 +153,9 @@ export class IncidenciasService {
                 t.nombre AS tipo
            FROM incidencias i
            JOIN tipos_incidencia t ON t.id = i.tipo_id
+           LEFT JOIN alertas a ON a.incidencia_id = i.id
           WHERE ${w}
+            AND NOT COALESCE(a.sin_ubicacion, false)
        ),
        agg AS (
          SELECT celda, count(*)::int AS peso,
@@ -176,17 +181,23 @@ export class IncidenciasService {
     if (q.hasta) { params.push(q.hasta); w += ` AND i.ocurrido_en <= $${params.length}`; }
     if (q.tipo) { params.push(q.tipo.toLowerCase()); w += ` AND (lower(t.nombre) = $${params.length} OR lower(t.codigo) = $${params.length})`; }
 
+    // Se excluyen las incidencias de SOS sin ubicacion del total y del tiempo
+    // promedio: no son despachos reales y distorsionan las metricas.
     const porTipo = await this.ds.query(
       `SELECT t.codigo, t.nombre, count(*)::int AS total
-         FROM incidencias i JOIN tipos_incidencia t ON t.id = i.tipo_id
-        WHERE ${w}
+         FROM incidencias i
+         JOIN tipos_incidencia t ON t.id = i.tipo_id
+         LEFT JOIN alertas a ON a.incidencia_id = i.id
+        WHERE ${w} AND NOT COALESCE(a.sin_ubicacion, false)
         GROUP BY t.codigo, t.nombre ORDER BY total DESC`,
       params,
     );
     const total = await this.ds.query(
       `SELECT count(*)::int AS total, avg(EXTRACT(EPOCH FROM (i.actualizado_en - i.ocurrido_en)))::float AS tiempo_promedio_seg
-         FROM incidencias i JOIN tipos_incidencia t ON t.id = i.tipo_id
-        WHERE ${w}`,
+         FROM incidencias i
+         JOIN tipos_incidencia t ON t.id = i.tipo_id
+         LEFT JOIN alertas a ON a.incidencia_id = i.id
+        WHERE ${w} AND NOT COALESCE(a.sin_ubicacion, false)`,
       params,
     );
     const unidadesActivas = await this.ds.query(
