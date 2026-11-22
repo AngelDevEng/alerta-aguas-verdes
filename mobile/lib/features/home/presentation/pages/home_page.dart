@@ -779,7 +779,7 @@ class _PanelOperadorBoton extends StatelessWidget {
         builder: (context, state) {
           if (state is! AuthAutenticado) return const SizedBox.shrink();
           final u = state.usuario;
-          if (u.esCiudadano) return const SizedBox.shrink();
+          if (u.esCiudadano || u.rol == 'SERENO') return const SizedBox.shrink();
           return TextButton(
             onPressed: () => context.go(Rutas.patrullero),
             child: const Text('Panel operador (alertas activas)'),

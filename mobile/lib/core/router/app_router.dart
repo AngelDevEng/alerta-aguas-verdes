@@ -67,38 +67,10 @@ class AppRouter {
 
   final AuthBloc _authBloc;
 
-  /// Rutas que exigen rol de operador (SERENO/OPERADOR/ADMIN/DIRECTIVO).
-  /// El backend igual valida con `@Roles`; esto solo evita mostrar una pantalla
-  /// que el servidor iba a rechazar con 403.
-  ///
-  /// `Rutas.reportar` NO esta aca a proposito: `POST /incidencias` acepta
-  /// `CIUDADANO` en el backend, y Reportar es justamente la pantalla que mas le
-  /// importa a un vecino. Bloquearla seria quitarle la funcion principal de la
-  /// app a la mitad de los usuarios.
-  static const _rutasProtegidas = <String>{
-    Rutas.mapa,
-    Rutas.incidencias,
-    Rutas.patrullero,
-  };
-
-  /// Rutas que el ciudadano sin sesion si puede abrir (pblicas).
-  static const _rutasPublicas = <String>{
-    Rutas.login,
-    Rutas.home,
-    Rutas.emergencias,
-    Rutas.reportar,
-  };
-
-  /// Si la ruta cae dentro de una zona que exige rol operativo.
-  ///
-  /// Compara por prefijo y no por igualdad exacta porque hay rutas con
-  /// parametros (`/incidencias/:id`). Con `contains` sobre `matchedLocation`, el
-  /// detalle de una incidencia se escapaba de la guarda y un ciudadano llegaba
-  /// hasta la pantalla para recibir un 403 del servidor. La guarda del cliente
-  /// no reemplaza a la del backend: solo evita mostrar una pantalla que el
-  /// servidor va a rechazar.
-  static bool _exigeOperador(String ruta) => _rutasProtegidas
-      .any((r) => ruta == r || ruta.startsWith('$r/'));
+  static bool _exigePanelOperativo(String ruta) =>
+      ruta == Rutas.mapa ||
+      ruta == Rutas.incidencias ||
+      ruta.startsWith('${Rutas.incidencias}/');
 
   late final GoRouter _router = GoRouter(
     initialLocation: Rutas.home,
@@ -186,12 +158,15 @@ class AppRouter {
       }
       // Con sesión: no quedarse en el login.
       if (enLogin) {
-        // SERENO va directo a su panel de alertas; el resto al home.
+        // SERENO va a su vista de alertas asignables; operadores al home.
         if (usuario.rol == 'SERENO') return Rutas.patrullero;
         return Rutas.home;
       }
 
-      if (_exigeOperador(destino) && usuario.esCiudadano) {
+      if (_exigePanelOperativo(destino) && (usuario.esCiudadano || usuario.rol == 'SERENO')) {
+        return Rutas.home;
+      }
+      if (destino == Rutas.patrullero && usuario.esCiudadano) {
         return Rutas.home;
       }
       return null;

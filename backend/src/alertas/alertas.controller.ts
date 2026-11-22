@@ -47,7 +47,7 @@ export class AlertasController {
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get('activas')
-  activas() { return this.svc.activas(); }
+  activas(@CurrentUser() u: UsuarioAutenticado) { return this.svc.activasParaUsuario(u); }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get(':id')
@@ -89,6 +89,6 @@ export class AlertasController {
   @Roles('SERENO', 'OPERADOR', 'ADMIN')
   @Patch(':id/estado')
   cambiarEstado(@Param('id', ParseUUIDPipe) id: string, @Body() dto: EstadoAlertaDto, @CurrentUser() u: UsuarioAutenticado) {
-    return this.svc.cambiarEstado(id, dto.estado, u.id);
+    return this.svc.cambiarEstado(id, dto.estado, u);
   }
 }

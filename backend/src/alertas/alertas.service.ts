@@ -353,6 +353,36 @@ export class AlertasService {
     return this.ds.query(`${SELECT_BASE} ${where} ORDER BY a.creada_en DESC LIMIT $1`, [limite, ...(estado ? [estado] : [])]);
   }
 
+  /**
+   * Alertas visibles para una unidad: las ACTIVAS globales (para aceptar) y la
+   * ACEPTADA asignada a la unidad del sereno autenticado.
+   */
+  async activasParaUsuario(u: { id: string; rol: string }) {
+    if (u.rol === 'OPERADOR' || u.rol === 'ADMIN' || u.rol === 'DIRECTIVO') {
+      return this.activas();
+    }
+    if (u.rol !== 'SERENO') return [];
+
+    const unidades = await this.ds.query(
+      `SELECT id FROM unidades_serenazgo WHERE responsable_id = $1 AND eliminado_en IS NULL`,
+      [u.id],
+    );
+    const unidadId = unidades[0]?.id ?? null;
+    return this.ds.query(
+      `SELECT a.id, a.telefono, a.direccion, a.estado, a.origen, a.creada_en AS "creadaEn",
+              ST_Y(a.ubicacion::geometry) AS latitud, ST_X(a.ubicacion::geometry) AS longitud,
+              a.incidencia_id AS "incidenciaId", i.codigo AS "incidenciaCodigo",
+              a.unidad_id AS "unidadId",
+              (a.unidad_id = $1) AS "asignadaAMiUnidad"
+         FROM alertas a
+         LEFT JOIN incidencias i ON i.id = a.incidencia_id
+        WHERE a.estado = 'ACTIVA'
+           OR (a.estado = 'ACEPTADA' AND a.unidad_id = $1)
+        ORDER BY (a.estado = 'ACEPTADA') DESC, a.creada_en ASC`,
+      [unidadId],
+    );
+  }
+
   activas() {
     return this.ds.query(
       `SELECT id, telefono, direccion, estado, origen, creada_en AS "creadaEn",
@@ -491,7 +521,8 @@ export class AlertasService {
   }
 
   /** Al cerrar la alerta se cierra tambien la incidencia CRITICA asociada y se libera la unidad. */
-  async cambiarEstado(id: string, estado: string, usuarioId: string) {
+  async cambiarEstado(id: string, estado: string, usuario: { id: string; rol: string }) {
+    const usuarioId = usuario.id;
     const alerta = await this.findOne(id);
 
     // ACEPTADA: el sereno toma la alerta con su propia unidad. El cliente nunca
@@ -530,15 +561,24 @@ export class AlertasService {
 
     await this.ds.transaction(async (m) => {
       if (estado === 'ACEPTADA') {
+        if (alerta.estado !== 'ACTIVA') {
+          throw new ConflictException('La alerta ya no esta activa.');
+        }
+
         await m.query(
           `UPDATE alertas
               SET estado = 'ACEPTADA',
                   aceptada_por = $2::uuid,
                   aceptada_en  = now(),
                   unidad_id    = $3::uuid
-            WHERE id = $1`,
+            WHERE id = $1 AND estado = 'ACTIVA'`,
           [id, usuarioId, unidadAceptada],
         );
+
+        const [tomada] = await m.query(`SELECT estado, unidad_id FROM alertas WHERE id = $1`, [id]);
+        if (tomada?.estado !== 'ACEPTADA' || tomada?.unidad_id !== unidadAceptada) {
+          throw new ConflictException('La alerta ya no esta activa.');
+        }
 
         await m.query(
           `UPDATE unidades_serenazgo SET estado = 'OCUPADA' WHERE id = $1`,
@@ -560,17 +600,24 @@ export class AlertasService {
         return;
       }
 
-      await m.query(
-        `UPDATE alertas SET estado = $2::varchar,
-                atendida_por  = CASE WHEN $2::varchar IN ('ATENDIDA','CANCELADA','FALSA') THEN $3::uuid ELSE atendida_por END,
-                atendida_en   = CASE WHEN $2::varchar IN ('ATENDIDA','CANCELADA','FALSA') THEN now() ELSE atendida_en END
-          WHERE id = $1`,
-        [id, estado, usuarioId]);
-
-      // Al cerrar la alerta se acorta la ventana del token. El token NO se
-      // revoca: queda vigente 10 minutos solo para GET /seguimiento. Las peticiones
-      // POST /posicion y POST /cancelar rechazan alertas terminales antes de validar el token.
       if (terminal.includes(estado)) {
+        if (usuario.rol === 'SERENO' && alerta.unidadId) {
+          const [propia] = await m.query(
+            `SELECT 1 FROM unidades_serenazgo WHERE id = $1 AND responsable_id = $2 AND eliminado_en IS NULL`,
+            [alerta.unidadId, usuarioId],
+          );
+          if (!propia) throw new ConflictException('La alerta no esta asignada a tu unidad.');
+        }
+        await m.query(
+          `UPDATE alertas SET estado = $2::varchar,
+                  atendida_por  = CASE WHEN $2::varchar IN ('ATENDIDA','CANCELADA','FALSA') THEN $3::uuid ELSE atendida_por END,
+                  atendida_en   = CASE WHEN $2::varchar IN ('ATENDIDA','CANCELADA','FALSA') THEN now() ELSE atendida_en END
+            WHERE id = $1`,
+          [id, estado, usuarioId]);
+
+        // Al cerrar la alerta se acorta la ventana del token. El token NO se
+        // revoca: queda vigente 10 minutos solo para GET /seguimiento. Las peticiones
+        // POST /posicion y POST /cancelar rechazan alertas terminales antes de validar el token.
         await m.query(
           `UPDATE sessions_anonimas
               SET expira_en = LEAST(expira_en, now() + interval '10 minutes')
