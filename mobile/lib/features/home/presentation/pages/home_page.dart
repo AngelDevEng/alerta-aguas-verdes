@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
@@ -309,6 +311,18 @@ class _SosBanner extends StatelessWidget {
               color: const Color(0xFF0A6C9C),
               icono: Icons.send_rounded,
               texto: 'Enviando auxilio a central...',
+              botones: [
+                _BotonBanner(
+                  texto: 'Cancelar envío',
+                  color: const Color(0xFF0A6C9C),
+                  onPressed: () => context.read<SosBloc>().add(
+                        const SosCancelarEnvio(),
+                      ),
+                ),
+                // Si la central no responde en 5 s, el usuario necesita el
+                // telefono sin esperar a que se agote el timeout de la peticion.
+                const _LlamarAhoraTardio(),
+              ],
             ),
           SosConectandoCentral() => _banner(
               color: const Color(0xFFB26A00),
@@ -430,6 +444,46 @@ class _BotonBanner extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Boton "Llamar ahora" que aparece si el envio sigue en curso tras 5 s.
+///
+/// Mientras la peticion esta en vuelo el usuario no tiene el telefono a mano;
+/// si la central no responde, esperar al timeout (8 s) es demasiado. Este
+/// widget arranca su propio temporizador al montarse y lo cancela al desmontar,
+/// asi que el boton solo se muestra en envios que realmente se alargan.
+class _LlamarAhoraTardio extends StatefulWidget {
+  const _LlamarAhoraTardio();
+
+  @override
+  State<_LlamarAhoraTardio> createState() => _LlamarAhoraTardioState();
+}
+
+class _LlamarAhoraTardioState extends State<_LlamarAhoraTardio> {
+  static const _umbral = Duration(seconds: 5);
+
+  Timer? _timer;
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(_umbral, () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+    return _BotonBanner(texto: 'Llamar ahora', onPressed: _llamarCentral);
   }
 }
 
