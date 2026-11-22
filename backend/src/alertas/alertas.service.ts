@@ -91,7 +91,8 @@ export class AlertasService {
     // 1. Reintento idempotente: misma clave + mismo dispositivo -> alerta original.
     if (claveHash) {
       const previa = await this.idempotenciaPorClave(claveHash);
-      if (previa && previa.dispositivo_id === dispositivo) {
+      if (previa) {
+        this.validarReintento(previa, dispositivo, solicitudHash);
         return this.entregarAlerta(previa.alerta_id as string, dispositivo, ip);
       }
     }
@@ -129,7 +130,8 @@ export class AlertasService {
       // Se devuelve la que gano.
       if (e?.code === '23505' && claveHash) {
         const previa = await this.idempotenciaPorClave(claveHash);
-        if (previa && previa.dispositivo_id === dispositivo) {
+        if (previa) {
+          this.validarReintento(previa, dispositivo, solicitudHash);
           return this.entregarAlerta(previa.alerta_id as string, dispositivo, ip);
         }
       }
@@ -141,6 +143,25 @@ export class AlertasService {
         }
       }
       throw e;
+    }
+  }
+
+  /**
+   * Una `Idempotency-Key` identifica un unico envio. Si se reutiliza con otro
+   * dispositivo o con otro cuerpo, no es un reintento: es una colision (UUID
+   * repetido o bug del cliente). Se responde 409 en vez de devolver una alerta
+   * que no corresponde a quien pregunta.
+   */
+  private validarReintento(
+    previa: { dispositivo_id: string | null; solicitud_hash: string },
+    dispositivo: string | null,
+    solicitudHash: string,
+  ) {
+    if (previa.dispositivo_id !== dispositivo) {
+      throw new ConflictException('La clave de idempotencia ya fue usada por otro dispositivo.');
+    }
+    if (previa.solicitud_hash !== solicitudHash) {
+      throw new ConflictException('La clave de idempotencia ya fue usada con otra solicitud.');
     }
   }
 
@@ -166,7 +187,7 @@ export class AlertasService {
   private async idempotenciaPorClave(claveHash: string) {
     try {
       const [row] = await this.ds.query(
-        `SELECT alerta_id, dispositivo_id
+        `SELECT alerta_id, dispositivo_id, solicitud_hash
            FROM alertas_idempotencia
           WHERE clave_hash = $1
           LIMIT 1`,
@@ -288,6 +309,13 @@ export class AlertasService {
         [a.id, tokenHash, dispositivo, ip ?? null]);
 
       if (claveHash) {
+        // SAVEPOINT: la deduplicacion es best-effort y NO debe tumbar la
+        // transaccion. Sin el savepoint, un fallo del insert (tabla ausente,
+        // restriccion, etc.) abortaria toda la transaccion y se perderian la
+        // incidencia y la alerta recien creadas. Con el savepoint se revierte
+        // solo este paso y la alerta se confirma igual.
+        const savepoint = 'sp_alertas_idempotencia';
+        await m.query(`SAVEPOINT ${savepoint}`);
         try {
           await m.query(
             `INSERT INTO alertas_idempotencia (clave_hash, solicitud_hash, alerta_id, dispositivo_id)
@@ -295,8 +323,14 @@ export class AlertasService {
              ON CONFLICT (clave_hash) DO NOTHING`,
             [claveHash, solicitudHash ?? '', a.id, dispositivo],
           );
+          await m.query(`RELEASE SAVEPOINT ${savepoint}`);
         } catch (e: any) {
-          // La alerta ya se inserto; la deduplicacion es best-effort.
+          try {
+            await m.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+          } catch {
+            // Si el rollback tambien falla, la transaccion ya estaba abortada;
+            // se registra abajo y el SOS no se pierde por esta capa.
+          }
           if (e?.code === '42P01') {
             this.logger.warn(
               'Tabla alertas_idempotencia no existe (SQLSTATE 42P01). La alerta se creo sin deduplicar por clave; aplica la migracion 09.',
