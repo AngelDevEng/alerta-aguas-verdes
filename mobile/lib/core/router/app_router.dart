@@ -67,6 +67,13 @@ class AppRouter {
 
   final AuthBloc _authBloc;
 
+  static const _rutasPublicas = <String>{
+    Rutas.login,
+    Rutas.home,
+    Rutas.emergencias,
+    Rutas.reportar,
+  };
+
   static bool _exigePanelOperativo(String ruta) =>
       ruta == Rutas.mapa ||
       ruta == Rutas.incidencias ||
