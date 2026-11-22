@@ -13,12 +13,21 @@ class SosInicial extends SosState {
   const SosInicial();
 }
 
-/// GPS + `POST /alertas` en curso.
+/// GPS + `POST /alertas` en curso (o reintento inmediato).
 ///
 /// Mientras se esta aca el boton queda deshabilitado: dos SOS simultaneos
 /// crearian dos alertas criticas en la sala de operacion.
 class SosEnviando extends SosState {
   const SosEnviando();
+}
+
+/// La alerta no se pudo confirmar y se esta reintentando con backoff.
+///
+/// Es un estado persistente (no un snackbar): el usuario debe ver que su SOS
+/// sigue en curso aunque la red este caida. El pendiente se conserva para que
+/// el reintento reutilice la misma `Idempotency-Key`.
+class SosConectandoCentral extends SosState {
+  const SosConectandoCentral();
 }
 
 /// Alerta creada: "Auxilio enviado a central" (texto del legacy).
@@ -27,17 +36,28 @@ class SosEnviando extends SosState {
 /// entrar a su seguimiento aunque cierre la app: se guardan en almacenamiento
 /// seguro aparte del JWT.
 class SosEnviado extends SosState {
-  const SosEnviado({this.alertaId, this.sessionToken});
-  final String? alertaId;
+  const SosEnviado({required this.alertaId, this.sessionToken});
+  final String alertaId;
   final String? sessionToken;
   @override
   List<Object?> get props => [alertaId, sessionToken];
 }
 
-/// Algo fallo (GPS o red).
+/// La alerta ya cerro (reintento idempotente de una alerta terminal). No hay
+/// token: se limpia la sesion y se avisa que ya fue atendida.
+class SosFinalizada extends SosState {
+  const SosFinalizada({required this.alertaId, this.estado});
+  final String alertaId;
+  final String? estado;
+  @override
+  List<Object?> get props => [alertaId, estado];
+}
+
+/// Algo fallo de forma no reintentable (GPS sin ubicacion es un envio, no un
+/// error; 429, validacion, etc. si lo son).
 ///
-/// El mensaje viene del tipo de [Failure], nunca del texto crudo del
-/// backend.
+/// El mensaje viene del tipo de [Failure], nunca del texto crudo del backend.
+/// La UI siempre ofrece "Llamar ahora" ante este estado.
 class SosError extends SosState {
   const SosError(this.mensaje);
 
@@ -45,4 +65,11 @@ class SosError extends SosState {
 
   @override
   List<Object?> get props => [mensaje];
+}
+
+/// El usuario cancelo el envio en curso. Los reintentos automaticos se
+/// detuvieron; si ya hubo al menos un intento el pendiente se conserva para
+/// poder reintentar sin duplicar la alerta.
+class SosCancelado extends SosState {
+  const SosCancelado();
 }

@@ -4,6 +4,7 @@ import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/di/injector.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../../core/storage/sos_session_store.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -65,7 +66,10 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<SosBloc>(create: (_) => GetIt.I<SosBloc>()),
+        // `.value` a proposito: el SosBloc es un singleton de aplicacion. Si se
+        // creara con `create`, al desmontar el home se cerraria el bloc y se
+        // perderian los reintentos de un SOS pendiente.
+        BlocProvider<SosBloc>.value(value: GetIt.I<SosBloc>()),
         BlocProvider<CatalogosBloc>(
           create: (_) =>
               GetIt.I<CatalogosBloc>()..add(const CargarEmergencias()),
@@ -78,15 +82,7 @@ class HomePage extends StatelessWidget {
           if (state is SosEnviado) {
             final alertaId = state.alertaId;
             final sessionToken = state.sessionToken;
-            if (alertaId != null && sessionToken != null) {
-              // El token anonimo vive aparte del JWT: es lo unico que permite
-              // volver al seguimiento aunque se cierre la app.
-              if (GetIt.I.isRegistered<SosSessionStore>()) {
-                GetIt.I<SosSessionStore>().save(
-                  alertaId: alertaId,
-                  sessionToken: sessionToken,
-                ).catchError((_) {});
-              }
+            if (alertaId.isNotEmpty && sessionToken != null) {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => RastreoCiudadanoPage(
                   alertaId: alertaId,
@@ -98,13 +94,9 @@ class HomePage extends StatelessWidget {
             return;
           }
 
-          final mensaje = switch (state) {
-            SosEnviando() => 'Enviando auxilio a central...',
-            SosError(:final mensaje) => mensaje,
-            _ => null,
-          };
-          if (mensaje == null) return;
-          _snack(context, mensaje);
+          if (state is SosFinalizada) {
+            _snack(context, 'Tu alerta ya fue atendida por serenazgo.');
+          }
         },
         child: const _LanzadorPanico(),
       ),
@@ -131,6 +123,9 @@ class _LanzadorPanico extends StatelessWidget {
           child: Column(
             children: [
               _Encabezado(onEscudo: () => _accionesSesion(context)),
+              // Banner persistente del estado del SOS: "Conectando con la
+              // central..." mientras reintenta, o el error con "Llamar ahora".
+              const _SosBanner(),
               // El legacy reparte header/SOS/grid con constraints fijas; aca
               // el SOS queda Flexible y la grilla con alto proporcional para
               // que ninguna pantalla desborde (los dp del XML son fijos y en
@@ -254,19 +249,24 @@ class _SeccionSos extends StatelessWidget {
       child: FittedBox(
         fit: BoxFit.contain,
         child: BlocBuilder<SosBloc, SosState>(
-          buildWhen: (previo, actual) =>
-              (previo is SosEnviando) != (actual is SosEnviando),
+          buildWhen: (previo, actual) {
+            final previoOcupado =
+                previo is SosEnviando || previo is SosConectandoCentral;
+            final actualOcupado =
+                actual is SosEnviando || actual is SosConectandoCentral;
+            return previoOcupado != actualOcupado;
+          },
           builder: (context, sos) {
-            final enviando = sos is SosEnviando;
+            final ocupado = sos is SosEnviando || sos is SosConectandoCentral;
             return Semantics(
               button: true,
               label: 'SOS ubicacion',
               child: InkWell(
                 key: const Key('menu_sos'),
                 customBorder: const CircleBorder(),
-                // Mientras envia, el SosBloc igual ignora un toque duplicado;
-                // sin esto el usuario no veria que algo esta pasando.
-                onTap: enviando
+                // Mientras envia o reintenta, el SosBloc igual ignora un toque
+                // duplicado; sin esto el usuario no veria que algo esta pasando.
+                onTap: ocupado
                     ? null
                     : () => context.read<SosBloc>().add(const SosSolicitado()),
                 child: Image.asset(
@@ -283,6 +283,162 @@ class _SeccionSos extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Banner persistente con el estado del envio de SOS.
+///
+/// Reemplaza el snackbar para los estados que exigen atencion sostenida: si la
+/// central no responde, el usuario ve "Conectando con la central..." sin que
+/// desaparezca; si el envio falla de forma definitiva, ve el error y un boton
+/// "Llamar ahora" al serenazgo.
+class _SosBanner extends StatelessWidget {
+  const _SosBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SosBloc, SosState>(
+      buildWhen: (previo, actual) {
+        if (previo is SosError && actual is SosError) {
+          return previo.mensaje != actual.mensaje;
+        }
+        return previo.runtimeType != actual.runtimeType;
+      },
+      builder: (context, state) {
+        return switch (state) {
+          SosEnviando() => _banner(
+              color: const Color(0xFF0A6C9C),
+              icono: Icons.send_rounded,
+              texto: 'Enviando auxilio a central...',
+            ),
+          SosConectandoCentral() => _banner(
+              color: const Color(0xFFB26A00),
+              icono: Icons.wifi_tethering_rounded,
+              texto: 'Conectando con la central...',
+              botones: [
+                _BotonBanner(
+                  texto: 'Cancelar envío',
+                  color: const Color(0xFFB26A00),
+                  onPressed: () => context.read<SosBloc>().add(
+                        const SosCancelarEnvio(),
+                      ),
+                ),
+              ],
+            ),
+          SosError(:final mensaje) => _banner(
+              color: const Color(0xFFB3261E),
+              icono: Icons.warning_amber_rounded,
+              texto: mensaje,
+              botones: [
+                _BotonBanner(
+                  texto: 'Llamar ahora',
+                  onPressed: _llamarCentral,
+                ),
+              ],
+            ),
+          SosCancelado() => _banner(
+              color: const Color(0xFF5F6368),
+              icono: Icons.stop_circle_outlined,
+              texto:
+                  'Se detuvo el envío. Si la central ya recibió tu alerta, '
+                  'podrá contactarte.',
+              botones: [
+                _BotonBanner(
+                  texto: 'Reintentar',
+                  color: const Color(0xFF5F6368),
+                  onPressed: () => context.read<SosBloc>().add(
+                        const SosSolicitado(),
+                      ),
+                ),
+                _BotonBanner(
+                  texto: 'Llamar ahora',
+                  color: const Color(0xFF5F6368),
+                  onPressed: _llamarCentral,
+                ),
+              ],
+            ),
+          _ => const SizedBox.shrink(),
+        };
+      },
+    );
+  }
+}
+
+Widget _banner({
+  required Color color,
+  required IconData icono,
+  required String texto,
+  List<Widget> botones = const [],
+}) {
+  return Container(
+    width: double.infinity,
+    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Icon(icono, color: Colors.white, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            texto,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              height: 1.2,
+            ),
+          ),
+        ),
+        ...botones,
+      ],
+    ),
+  );
+}
+
+class _BotonBanner extends StatelessWidget {
+  const _BotonBanner({
+    required this.texto,
+    required this.onPressed,
+    this.color = const Color(0xFFB3261E),
+  });
+
+  final String texto;
+  final VoidCallback onPressed;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            texto,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Llama al serenazgo desde el banner de error del SOS.
+void _llamarCentral() {
+  launchUrl(
+    Uri.parse('tel:${Env.emergencyPhone}'),
+    mode: LaunchMode.externalApplication,
+  );
 }
 
 /// Grilla 2x2 de tarjetas del XML (`:93-266`).

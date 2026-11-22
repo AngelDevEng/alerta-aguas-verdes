@@ -45,6 +45,21 @@ class Env {
     'API_BASE_URL',
     defaultValue: 'https://alerta-aguas-verdes-api.onrender.com/api/v1',
   );
+
+  /// Numero de serenazgo al que se llama desde el banner de error del SOS.
+  ///
+  /// Provisional: confirmar con la municipalidad. Se puede sobreescribir por
+  /// entorno con `--dart-define=EMERGENCY_PHONE=...`.
+  static const emergencyPhone = String.fromEnvironment(
+    'EMERGENCY_PHONE',
+    defaultValue: '072601494',
+  );
+
+  /// Alternativa (central de emergencias) configurable por entorno.
+  static const emergencyPhoneAlternativa = String.fromEnvironment(
+    'EMERGENCY_PHONE_ALT',
+    defaultValue: '105',
+  );
 }
 
 Future<void> configureDependencies() async {
@@ -203,8 +218,15 @@ Future<void> configureDependencies() async {
   );
   sl.registerFactory(() => EnviarSosUseCase(sl<AlertaRepository>()));
   sl.registerFactory(() => CambiarEstadoAlertaUseCase(sl<AlertaRepository>()));
-  // Factory: cada apertura del home arranca sin el estado del envio anterior.
-  sl.registerFactory(() => SosBloc(sl<LocationService>(), sl<EnviarSosUseCase>()));
+  // El contrato de persistencia del SOS apunta al mismo almacen seguro.
+  sl.registerLazySingleton<SosStore>(() => sl<SosSessionStore>());
+  // Singleton: el estado del SOS es de toda la app. Los reintentos deben
+  // sobrevivir a que el home se desmonte y al reanudar la app se despacha
+  // SosReanudarPendiente. Con factory, cada apertura del home crearia un bloc
+  // nuevo y perderia el pendiente.
+  sl.registerLazySingleton(
+    () => SosBloc(sl<LocationService>(), sl<EnviarSosUseCase>(), sl<SosStore>()),
+  );
 
   // --- mapa ---
   // Factory, no singleton: cada apertura de `/mapa` vuelve a pedir la capa de
@@ -217,7 +239,7 @@ Future<void> configureDependencies() async {
   // Sin estado: el permiso se resuelve en cada llamada, no se cachea para que
   // el usuario pueda revocar el permiso desde Ajustes y el proximo reporte lo
   // respete sin reiniciar la app.
-  sl.registerFactory(() => const LocationService());
+  sl.registerFactory(() => LocationService());
 
   // --- realtime ---
   sl.registerLazySingleton<SocketService>(
