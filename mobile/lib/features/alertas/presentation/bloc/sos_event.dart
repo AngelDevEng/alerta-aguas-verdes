@@ -25,8 +25,9 @@ class SosReintentar extends SosEvent {
 }
 
 /// El usuario cancela el envio en curso desde el banner. Detiene los reintentos
-/// automaticos; si ya hubo al menos un intento, el pendiente se conserva (misma
-/// `Idempotency-Key`) para poder reintentar sin duplicar.
+/// automaticos, descarta cualquier respuesta en vuelo y borra el pendiente
+/// (al reabrir la app NO se reenvia). Si ya hubo al menos un intento, guarda
+/// aparte solo la `Idempotency-Key` para la cancelacion en servidor de la Fase 1.
 class SosCancelarEnvio extends SosEvent {
   const SosCancelarEnvio();
 }

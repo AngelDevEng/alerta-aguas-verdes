@@ -80,6 +80,17 @@ abstract interface class SosStore {
   Future<bool> hayPendienteExpirado();
 
   Future<void> clearPending();
+
+  /// Clave de idempotencia de un envio que el usuario cancelo despues de al
+  /// menos un intento. Se guarda SOLO la clave (nunca el payload) para que la
+  /// Fase 1 pueda cancelar la alerta en el servidor. No se reenvia: al cancelar
+  /// se borra el pendiente.
+  Future<void> saveClaveCancelada(String idempotencyKey);
+
+  /// Clave guardada por [saveClaveCancelada], o null.
+  Future<String?> readClaveCancelada();
+
+  Future<void> clearClaveCancelada();
 }
 
 /// Guarda la sesion anonima del ciudadano (alerta + token de seguimiento) y el
@@ -103,6 +114,7 @@ class SosSessionStore implements SosStore {
   static const _kToken = 'sos_session_token';
   static const _kDeviceId = 'sos_device_id';
   static const _kPending = 'sos_pending';
+  static const _kCancelKey = 'sos_cancel_key';
 
   @override
   Future<void> save({required String alertaId, required String sessionToken}) async {
@@ -192,5 +204,20 @@ class SosSessionStore implements SosStore {
   @override
   Future<void> clearPending() async {
     await _storage.delete(key: _kPending);
+  }
+
+  @override
+  Future<void> saveClaveCancelada(String idempotencyKey) async {
+    await _storage.write(key: _kCancelKey, value: idempotencyKey);
+  }
+
+  @override
+  Future<String?> readClaveCancelada() async {
+    return _storage.read(key: _kCancelKey);
+  }
+
+  @override
+  Future<void> clearClaveCancelada() async {
+    await _storage.delete(key: _kCancelKey);
   }
 }

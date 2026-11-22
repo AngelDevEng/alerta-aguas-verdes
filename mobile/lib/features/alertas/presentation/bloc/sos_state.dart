@@ -68,8 +68,9 @@ class SosError extends SosState {
 }
 
 /// El usuario cancelo el envio en curso. Los reintentos automaticos se
-/// detuvieron; si ya hubo al menos un intento el pendiente se conserva para
-/// poder reintentar sin duplicar la alerta.
+/// detuvieron, las respuestas en vuelo se ignoran y el pendiente se borro: al
+/// reabrir la app no se reenvia. Si ya hubo un intento, solo la
+/// `Idempotency-Key` quedo guardada para la cancelacion en servidor (Fase 1).
 class SosCancelado extends SosState {
   const SosCancelado();
 }

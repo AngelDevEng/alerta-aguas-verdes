@@ -53,6 +53,18 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   Timer? _timer;
   int _intentos = 0;
 
+  /// Ultimo pendiente en curso. Se conserva en memoria para que [SosCancelarEnvio]
+  /// sepa que clave copiar antes de borrar el pendiente de disco.
+  PendingSos? _pendiente;
+
+  /// true si al menos un intento ya salio a la red. Solo entonces tiene sentido
+  /// guardar la clave para la cancelacion en servidor de la Fase 1.
+  bool _huboIntento = false;
+
+  /// Marcador de cancelacion. Se incrementa al cancelar; un envio en vuelo que
+  /// capture un valor distinto al volver se descarta (respuesta tardia).
+  int _generacion = 0;
+
   Future<void> _onSolicitado(
     SosSolicitado event,
     Emitter<SosState> emit,
@@ -63,6 +75,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
     _timer?.cancel();
     _intentos = 0;
+    _huboIntento = false;
     emit(const SosEnviando());
 
     final pendiente = await _pendienteParaEnviar();
@@ -88,6 +101,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
     _timer?.cancel();
     _intentos = 0;
+    _huboIntento = false;
     emit(const SosEnviando());
     await _enviarPendiente(pendiente, emit);
   }
@@ -101,22 +115,31 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     await _enviarPendiente(event.pendiente, emit);
   }
 
-  /// Cancela el envio en curso: detiene los reintentos automaticos.
+  /// Cancela el envio en curso.
   ///
-  /// Si ya hubo al menos un intento, se conserva el pendiente (con su
-  /// `Idempotency-Key`) para que un `SosReanudarPendiente` posterior lo envie
-  /// sin crear otra alerta; el usuario puede volver a intentarlo desde el
-  /// boton. Si no hubo ninguno, no hay nada que conservar.
-  ///
-  /// TODO(Fase 1): distinguir "cancelar" de "pausar" y permitir reanudar
-  /// explicitamente desde el banner; hoy cancelar deja el pendiente vivo si ya
-  /// hubo intento, lo que significa que al reabrir la app se reintenta solo.
+  /// - Invalida cualquier respuesta en vuelo (marcador [_generacion]).
+  /// - Borra el pendiente: al reabrir la app NO se reenvia.
+  /// - Si ya hubo al menos un intento, guarda aparte SOLO la
+  ///   `Idempotency-Key` para que la Fase 1 pueda cancelar la alerta en el
+  ///   servidor. El payload (posicion, telefono) no se conserva.
   Future<void> _onCancelar(
     SosCancelarEnvio event,
     Emitter<SosState> emit,
   ) async {
+    _generacion++;
     _timer?.cancel();
     _timer = null;
+
+    final pendiente = _pendiente;
+    if (_huboIntento && pendiente != null) {
+      try {
+        await _store.saveClaveCancelada(pendiente.idempotencyKey);
+      } catch (_) {
+        // Sin almacenamiento seguro disponible: se cancela igual.
+      }
+    }
+    await _descartarPendiente();
+    _pendiente = null;
     emit(const SosCancelado());
   }
 
@@ -124,7 +147,10 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   /// nuevo leyendo el GPS. Si el GPS falla, se envia sin ubicacion.
   Future<PendingSos> _pendienteParaEnviar() async {
     final existente = await _leerPendiente();
-    if (existente != null) return existente;
+    if (existente != null) {
+      _pendiente = existente;
+      return existente;
+    }
 
     final posicion = await _location.posicionActual();
     final PosicionActual? valor = switch (posicion) {
@@ -139,6 +165,9 @@ class SosBloc extends Bloc<SosEvent, SosState> {
       precisionM: valor?.precisionMetros,
       sinUbicacion: valor == null,
     );
+    // SOS nueva: la clave de una cancelacion anterior ya no aplica.
+    await _descartarClaveCancelada();
+    _pendiente = pendiente;
     await _guardarPendiente(pendiente);
     return pendiente;
   }
@@ -147,6 +176,10 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     PendingSos pendiente,
     Emitter<SosState> emit,
   ) async {
+    _pendiente = pendiente;
+    final generacion = _generacion;
+    _huboIntento = true;
+
     final r = await _enviar(
       latitud: pendiente.latitud,
       longitud: pendiente.longitud,
@@ -154,7 +187,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
       sinUbicacion: pendiente.sinUbicacion,
       idempotencyKey: pendiente.idempotencyKey,
     );
-    if (isClosed) return;
+    // Respuesta tardia de un envio cancelado: se ignora (no navega ni confirma).
+    if (isClosed || generacion != _generacion) return;
 
     switch (r) {
       case Err(:final failure):
@@ -165,6 +199,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
           _programarReintento(pendiente, emit);
         } else {
           await _descartarPendiente();
+          await _descartarClaveCancelada();
           emit(SosError(failure.message));
         }
       case Ok(:final value):
@@ -175,6 +210,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   Future<void> _completar(AlertaSos value, Emitter<SosState> emit) async {
     if (value.tieneToken) {
       await _descartarPendiente();
+      await _descartarClaveCancelada();
+      _pendiente = null;
       await _guardarSesion(value.alertaId, value.sessionToken!);
       emit(SosEnviado(alertaId: value.alertaId, sessionToken: value.sessionToken));
       return;
@@ -182,6 +219,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
     if (value.esTerminal) {
       await _descartarPendiente();
+      await _descartarClaveCancelada();
+      _pendiente = null;
       await _descartarSesion();
       emit(SosFinalizada(alertaId: value.alertaId, estado: value.estado));
       return;
@@ -190,6 +229,8 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     // Respuesta sin token y sin estado terminal (no deberia pasar): se trata
     // como enviada sin token.
     await _descartarPendiente();
+    await _descartarClaveCancelada();
+    _pendiente = null;
     emit(SosEnviado(alertaId: value.alertaId));
   }
 
@@ -206,6 +247,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
 
     final retardo = _backoff[_intentos];
     _intentos++;
+    _pendiente = pendiente;
     emit(const SosConectandoCentral());
     _timer = Timer(retardo, () {
       if (isClosed) return;
@@ -242,6 +284,12 @@ class SosBloc extends Bloc<SosEvent, SosState> {
   Future<void> _descartarPendiente() async {
     try {
       await _store.clearPending();
+    } catch (_) {}
+  }
+
+  Future<void> _descartarClaveCancelada() async {
+    try {
+      await _store.clearClaveCancelada();
     } catch (_) {}
   }
 
