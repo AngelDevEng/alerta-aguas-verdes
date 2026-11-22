@@ -47,10 +47,13 @@ class UnidadRemoteDataSourceImpl implements UnidadRemoteDataSource {
             .toList(growable: false),
       );
 
+  /// Verificacion publica de placa (`GET /unidades/verificar`). Devuelve solo
+  /// `codigo`, `tipo` y `placa`: el ciudadano confirma que la placa existe sin
+  /// recibir estado, responsable ni ubicacion (datos operativos que exigen rol).
   @override
   Future<Result<List<Unidad>>> buscarPorPlaca(String placa) =>
       _api.get<List<Unidad>>(
-        '/unidades',
+        '/unidades/verificar',
         query: <String, dynamic>{'placa': placa},
         parse: (data) => aListaDeMapas(data)
             .map(UnidadDto.fromJson)
