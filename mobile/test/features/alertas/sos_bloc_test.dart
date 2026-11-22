@@ -27,6 +27,7 @@ class _StoreFake implements SosStore {
   PendingSos? pending;
   String? alertaId;
   String? token;
+  String? claveCancelada;
   bool expirado = false;
 
   @override
@@ -67,6 +68,16 @@ class _StoreFake implements SosStore {
 
   @override
   Future<void> clearPending() async => pending = null;
+
+  @override
+  Future<void> saveClaveCancelada(String idempotencyKey) async =>
+      claveCancelada = idempotencyKey;
+
+  @override
+  Future<String?> readClaveCancelada() async => claveCancelada;
+
+  @override
+  Future<void> clearClaveCancelada() async => claveCancelada = null;
 }
 
 /// Backend simulado: cuenta llamadas y captura lo que se envio.
@@ -367,8 +378,74 @@ void main() {
       verify: (_) {
         // Un solo intento: el cancel detuvo el backoff antes del segundo.
         expect(repo.llamadas, 1);
-        // El pendiente se conserva (ya hubo intento) para poder reintentar.
-        expect(store.pending, isNotNull);
+        // El pendiente se borra: al reabrir la app no se reenvia.
+        expect(store.pending, isNull);
+        // Solo la clave queda guardada para la cancelacion en servidor (Fase 1).
+        expect(store.claveCancelada, isNotNull);
+      },
+    );
+
+    blocTest<SosBloc, SosState>(
+      'cancelar y reabrir la app no reenvia la SOS',
+      build: () {
+        repo = _AlertasFake(
+          falla: const ServerFailure(503, 'El servidor fallo (503).'),
+        );
+        store = _StoreFake();
+        return SosBloc(
+          _LocationFake(posicion: _posicion),
+          EnviarSosUseCase(repo),
+          store,
+        );
+      },
+      act: (bloc) async {
+        bloc.add(const SosSolicitado());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        bloc.add(const SosCancelarEnvio());
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        // Reabrir la app despacha este evento; con el pendiente borrado no debe
+        // emitir nada ni gastar otra peticion.
+        bloc.add(const SosReanudarPendiente());
+      },
+      wait: const Duration(milliseconds: 100),
+      expect: () => const [
+        SosEnviando(),
+        SosConectandoCentral(),
+        SosCancelado(),
+      ],
+      verify: (_) {
+        expect(repo.llamadas, 1, reason: 'cancelar borro el pendiente');
+        expect(store.pending, isNull);
+        expect(store.claveCancelada, isNotNull);
+      },
+    );
+
+    blocTest<SosBloc, SosState>(
+      'respuesta tardia tras cancelar no emite Enviado ni navega',
+      build: () {
+        repo = _AlertasFake(retardo: const Duration(milliseconds: 80));
+        store = _StoreFake();
+        return SosBloc(
+          _LocationFake(posicion: _posicion),
+          EnviarSosUseCase(repo),
+          store,
+        );
+      },
+      act: (bloc) async {
+        bloc.add(const SosSolicitado());
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        bloc.add(const SosCancelarEnvio());
+      },
+      wait: const Duration(milliseconds: 300),
+      expect: () => const [
+        SosEnviando(),
+        SosCancelado(),
+      ],
+      verify: (_) {
+        expect(repo.llamadas, 1);
+        expect(store.pending, isNull);
+        expect(store.claveCancelada, isNotNull);
+        expect(store.alertaId, isNull, reason: 'no se guardo sesion de una respuesta tardia');
       },
     );
   });

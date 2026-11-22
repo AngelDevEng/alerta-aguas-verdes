@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:alerta_aguas_verdes/core/error/result.dart';
 import 'package:alerta_aguas_verdes/core/location/location_service.dart';
 import 'package:alerta_aguas_verdes/core/storage/sos_session_store.dart';
@@ -96,6 +98,13 @@ class _LocationFake implements LocationService {
 
 /// Doble del repositorio de alertas: cuenta toques y captura lo enviado.
 class _AlertasFalsa implements AlertaRepository {
+  _AlertasFalsa({this.puerta});
+
+  /// Compuerta manual: la peticion no responde hasta que el test la complete.
+  /// Permite probar el banner de "Llamar ahora" con un envio en curso y evita
+  /// dejar un Timer real pendiente al terminar el test.
+  final Completer<void>? puerta;
+
   int llamadas = 0;
   double? latitudEnviada;
   bool? sinUbicacionEnviada;
@@ -111,6 +120,7 @@ class _AlertasFalsa implements AlertaRepository {
     llamadas++;
     latitudEnviada = latitud;
     sinUbicacionEnviada = sinUbicacion;
+    if (puerta != null) await puerta!.future;
     return const Ok(AlertaSos(alertaId: 'alerta-1', sessionToken: 'token-1'));
   }
 
@@ -157,6 +167,15 @@ class _StoreFalso implements SosStore {
 
   @override
   Future<void> clearPending() async => pending = null;
+
+  @override
+  Future<void> saveClaveCancelada(String idempotencyKey) async {}
+
+  @override
+  Future<String?> readClaveCancelada() async => null;
+
+  @override
+  Future<void> clearClaveCancelada() async {}
 }
 
 const _admin = Usuario(
@@ -304,5 +323,35 @@ void main() {
     expect(alertas.llamadas, 1,
         reason: 'sin GPS la SOS se envia igual, marcada sin ubicacion');
     expect(alertas.sinUbicacionEnviada, isTrue);
+  });
+
+  testWidgets('si el envio supera 5 s aparece "Llamar ahora" en el banner',
+      (tester) async {
+    // Peticion que no responde dentro de la ventana del banner.
+    final puerta = Completer<void>();
+    final alertas = _AlertasFalsa(puerta: puerta);
+    await _mostrar(tester, alertas: alertas);
+
+    await tester.tap(find.byKey(const Key('menu_sos')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('Enviando auxilio a central...'), findsOneWidget);
+    expect(find.text('Llamar ahora'), findsNothing);
+
+    await tester.pump(const Duration(seconds: 6));
+
+    expect(find.text('Llamar ahora'), findsOneWidget);
+
+    // Cancelar libera la peticion en vuelo sin navegar; asi el test no deja
+    // timers reales pendientes.
+    await tester.tap(find.text('Cancelar envío'));
+    await tester.pump();
+    puerta.complete();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(alertas.llamadas, 1);
+    expect(find.text('ALERTA'), findsOneWidget, reason: 'no navego a rastreo');
+    expect(find.text('Cancelar envío'), findsNothing);
   });
 }
