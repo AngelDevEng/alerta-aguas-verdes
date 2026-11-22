@@ -72,6 +72,7 @@ class SosBloc extends Bloc<SosEvent, SosState> {
     // Guarda anti doble tap. `emit` actualiza el estado de forma sincronica,
     // asi que un segundo toque (evento concurrente) ve [SosEnviando] y sale.
     if (state is SosEnviando || state is SosConectandoCentral) return;
+    if (state is SosEnviado) return; // ya hay SOS activa; la UI debe llevar al rastreo
 
     _timer?.cancel();
     _intentos = 0;

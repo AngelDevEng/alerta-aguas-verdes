@@ -2,7 +2,7 @@ import { Body, Controller, Get, Headers, Ip, Param, ParseUUIDPipe, Patch, Post, 
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { AlertasService } from './alertas.service';
 import { CreateAlertaDto } from './dto/create-alerta.dto';
-import { EstadoAlertaDto, ListarAlertasQueryDto } from './dto/estado-alerta.dto';
+import { EstadoAlertaDto, ListarAlertasQueryDto, PosicionCiudadanoDto } from './dto/estado-alerta.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -64,6 +64,26 @@ export class AlertasController {
     @Headers('x-session-token') token?: string,
   ) {
     return this.svc.seguimiento(id, token);
+  }
+
+  /**
+   * El ciudadano publica su ubicacion mientras la SOS siga activa. Autenticado
+   * por el token anonimo de seguimiento, no por JWT.
+   */
+  @Public()
+  @Post(':id/posicion')
+  posicionCiudadano(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Headers('x-session-token') token: string | undefined,
+    @Body() dto: PosicionCiudadanoDto,
+  ) {
+    return this.svc.registrarPosicionCiudadano(
+      id,
+      token,
+      dto.latitud,
+      dto.longitud,
+      dto.velocidadKmh,
+    );
   }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN')

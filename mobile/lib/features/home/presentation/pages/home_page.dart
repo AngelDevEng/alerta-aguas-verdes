@@ -80,19 +80,19 @@ class HomePage extends StatelessWidget {
       child: BlocListener<SosBloc, SosState>(
         listenWhen: (previo, actual) =>
             previo != actual && actual is! SosInicial,
-        listener: (context, state) {
+        listener: (context, state) async {
           if (state is SosEnviado) {
             final alertaId = state.alertaId;
             final sessionToken = state.sessionToken;
             if (alertaId.isNotEmpty && sessionToken != null) {
-              Navigator.of(context).push(MaterialPageRoute(
+              await Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => RastreoCiudadanoPage(
                   alertaId: alertaId,
                   sessionToken: sessionToken,
                 ),
               ));
             }
-            _snack(context, 'Auxilio enviado a central');
+            if (context.mounted) _snack(context, 'Auxilio enviado a central');
             return;
           }
 
@@ -251,39 +251,67 @@ class _SeccionSos extends StatelessWidget {
       child: FittedBox(
         fit: BoxFit.contain,
         child: BlocBuilder<SosBloc, SosState>(
-          buildWhen: (previo, actual) {
-            final previoOcupado =
-                previo is SosEnviando || previo is SosConectandoCentral;
-            final actualOcupado =
-                actual is SosEnviando || actual is SosConectandoCentral;
-            return previoOcupado != actualOcupado;
-          },
+          buildWhen: (previo, actual) =>
+              previo.runtimeType != actual.runtimeType,
           builder: (context, sos) {
             final ocupado = sos is SosEnviando || sos is SosConectandoCentral;
-            return Semantics(
-              button: true,
-              label: 'SOS ubicacion',
-              child: InkWell(
-                key: const Key('menu_sos'),
-                customBorder: const CircleBorder(),
-                // Mientras envia o reintenta, el SosBloc igual ignora un toque
-                // duplicado; sin esto el usuario no veria que algo esta pasando.
-                onTap: ocupado
-                    ? null
-                    : () => context.read<SosBloc>().add(const SosSolicitado()),
-                child: Image.asset(
-                  'assets/images/btnsos.webp',
-                  width: 290,
-                  height: 290,
-                  fit: BoxFit.contain,
-                  gaplessPlayback: true,
+            final activa = sos is SosEnviado;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Semantics(
+                  button: true,
+                  label: activa ? 'Ver mi alerta activa' : 'SOS ubicacion',
+                  child: InkWell(
+                    key: const Key('menu_sos'),
+                    customBorder: const CircleBorder(),
+                    onTap: ocupado
+                        ? null
+                        : activa
+                            ? () => _abrirRastreoActivo(context, sos)
+                            : () => context.read<SosBloc>().add(const SosSolicitado()),
+                    child: Opacity(
+                      opacity: activa ? 0.55 : 1,
+                      child: Image.asset(
+                        'assets/images/btnsos.webp',
+                        width: 290,
+                        height: 290,
+                        fit: BoxFit.contain,
+                        gaplessPlayback: true,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                if (activa)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: FilledButton.icon(
+                      key: const Key('menu_ver_alerta_activa'),
+                      onPressed: () => _abrirRastreoActivo(context, sos),
+                      icon: const Icon(Icons.visibility),
+                      label: const Text('Ver mi alerta activa'),
+                    ),
+                  ),
+              ],
             );
           },
         ),
       ),
     );
+  }
+
+  Future<void> _abrirRastreoActivo(BuildContext context, SosEnviado sos) async {
+    final token = sos.sessionToken;
+    if (token == null || token.isEmpty) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => RastreoCiudadanoPage(
+        alertaId: sos.alertaId,
+        sessionToken: token,
+      ),
+    ));
+    if (context.mounted) {
+      context.findAncestorStateOfType<SosReanudarBotonState>()?._cargar();
+    }
   }
 }
 
@@ -762,67 +790,74 @@ class _PanelOperadorBoton extends StatelessWidget {
   }
 }
 
-/// Reanuda el seguimiento si el ciudadano ya tenia una SOS activa guardada.
-///
-/// La pantalla se abre con `alertaId` + `sessionToken`; si la alerta ya cerro,
-/// `RastreoCiudadanoPage` recibe 401/404, limpia la sesion y avisa. No se
-/// intenta adivinar el estado aqui: el servidor es la fuente de verdad.
+  /// Reanuda el seguimiento si el ciudadano ya tenia una SOS activa guardada.
+  ///
+  /// Se refresca al montar, al cambiar el estado del SosBloc y al volver de la
+  /// pantalla de rastreo. Si la sesion ya no existe, se oculta.
 class _SosReanudarBoton extends StatefulWidget {
   const _SosReanudarBoton();
 
   @override
-  State<_SosReanudarBoton> createState() => _SosReanudarBotonState();
+  State<_SosReanudarBoton> createState() => SosReanudarBotonState();
 }
 
-class _SosReanudarBotonState extends State<_SosReanudarBoton> {
-  bool _haySesion = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _cargar();
-  }
-
-  Future<void> _cargar() async {
-    if (!GetIt.I.isRegistered<SosSessionStore>()) return;
-    try {
-      final sesion = await GetIt.I<SosSessionStore>().read();
-      if (!mounted) return;
-      setState(() => _haySesion = sesion != null);
-    } catch (_) {
-      // Sin almacenamiento seguro disponible (p. ej. test) no se rompe el home.
+class SosReanudarBotonState extends State<_SosReanudarBoton> {
+    bool _haySesion = false;
+  
+    @override
+    void initState() {
+      super.initState();
+      _cargar();
+    }
+  
+    Future<void> _cargar() async {
+      if (!GetIt.I.isRegistered<SosSessionStore>()) return;
+      try {
+        final sesion = await GetIt.I<SosSessionStore>().read();
+        if (!mounted) return;
+        setState(() => _haySesion = sesion != null);
+      } catch (_) {}
+    }
+  
+    Future<void> _abrir() async {
+      if (!GetIt.I.isRegistered<SosSessionStore>()) return;
+      try {
+        final sesion = await GetIt.I<SosSessionStore>().read();
+        if (sesion == null || !mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => RastreoCiudadanoPage(
+            alertaId: sesion.alertaId,
+            sessionToken: sesion.sessionToken,
+          ),
+        ));
+        await _cargar();
+      } catch (_) {}
+    }
+  
+    @override
+    Widget build(BuildContext context) {
+      return BlocListener<SosBloc, SosState>(
+        listenWhen: (_, actual) =>
+            actual is SosEnviado || actual is SosFinalizada || actual is SosInicial || actual is SosCancelado,
+        listener: (_, __) => _cargar(),
+        child: !_haySesion
+            ? const SizedBox.shrink()
+            : Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const Key('menu_reanudar_sos'),
+                    onPressed: _abrir,
+                    icon: const Icon(Icons.my_location),
+                    label: const Text('Ver mi alerta activa'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF0A6C9C),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ),
+      );
     }
   }
-
-  Future<void> _abrir() async {
-    if (!GetIt.I.isRegistered<SosSessionStore>()) return;
-    try {
-      final sesion = await GetIt.I<SosSessionStore>().read();
-      if (sesion == null || !mounted) return;
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => RastreoCiudadanoPage(
-          alertaId: sesion.alertaId,
-          sessionToken: sesion.sessionToken,
-        ),
-      ));
-    } catch (_) {
-      // Mismo criterio que _cargar.
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_haySesion) return const SizedBox.shrink();
-    return TextButton.icon(
-      key: const Key('menu_reanudar_sos'),
-      onPressed: _abrir,
-      icon: const Icon(Icons.my_location),
-      label: const Text('Seguir rastreo de mi alerta'),
-      style: TextButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        minimumSize: const Size(0, 36),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-    );
-  }
-}

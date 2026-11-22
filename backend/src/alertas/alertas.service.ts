@@ -372,6 +372,90 @@ export class AlertasService {
    * (no tiene cuenta): valida el token anonimo hasheado en sessions_anonimas.
    */
   async seguimiento(id: string, token?: string) {
+    await this.validarSesionSeguimiento(id, token);
+    const alerta = await this.findOne(id);
+
+    const ubicaciones = await this.ds.query(
+      `SELECT ST_Y(ubicacion::geometry) AS latitud, ST_X(ubicacion::geometry) AS longitud,
+              velocidad_kmh AS "velocidadKmh", registrado_en AS "registradoEn"
+         FROM ubicaciones_ciudadano
+        WHERE alerta_id = $1
+        ORDER BY registrado_en DESC
+        LIMIT 50`,
+      [id],
+    );
+
+    let sereno: any = null;
+    if (alerta.unidadId) {
+      const rows = await this.ds.query(
+        `SELECT id, codigo, placa, tipo,
+                ST_Y(ultima_ubicacion::geometry) AS latitud,
+                ST_X(ultima_ubicacion::geometry) AS longitud,
+                ultima_actualizacion AS "ultimaActualizacion"
+           FROM unidades_serenazgo
+          WHERE id = $1 AND eliminado_en IS NULL`,
+        [alerta.unidadId],
+      );
+      sereno = rows[0] ?? null;
+    }
+
+    // Trazabilidad legible para el ciudadano: solo timestamps/estado, sin PII.
+    const historial = alerta?.incidenciaId
+      ? await this.ds.query(
+          `SELECT estado_nuevo AS estado, registrado_en AS "registradoEn"
+             FROM historial_incidencia
+            WHERE incidencia_id = $1
+            ORDER BY registrado_en ASC`,
+          [alerta.incidenciaId],
+        )
+      : [];
+
+    return {
+      alerta: {
+        id: alerta.id,
+        estado: alerta.estado,
+        creadaEn: alerta.creadaEn,
+        aceptadaEn: alerta.aceptadaEn,
+        atendidaEn: alerta.atendidaEn,
+        expiraEn: alerta.expiraEn,
+        sinUbicacion: alerta.sinUbicacion,
+        latitud: alerta.latitud,
+        longitud: alerta.longitud,
+        unidadId: alerta.unidadId,
+        incidenciaId: alerta.incidenciaId,
+      },
+      ciudadano: { ubicaciones },
+      sereno: sereno ?? null,
+      historial,
+    };
+  }
+
+  /**
+   * Ubicacion del ciudadano durante una SOS activa. Autenticada por el token
+   * anonimo de seguimiento (no JWT). Permite que la central y el ciudadano vean
+   * su posicion en el mapa sin exponer identidad.
+   */
+  async registrarPosicionCiudadano(
+    id: string,
+    token: string | undefined,
+    latitud: number,
+    longitud: number,
+    velocidadKmh?: number,
+  ) {
+    await this.validarSesionSeguimiento(id, token);
+    const alerta = await this.findOne(id);
+    if (ESTADOS_TERMINALES.includes(alerta.estado)) {
+      throw new ConflictException('La alerta ya no esta activa.');
+    }
+    await this.ds.query(
+      `INSERT INTO ubicaciones_ciudadano (alerta_id, ubicacion, velocidad_kmh)
+       VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, $4)`,
+      [id, longitud, latitud, velocidadKmh ?? null],
+    );
+    return { ok: true };
+  }
+
+  private async validarSesionSeguimiento(id: string, token?: string) {
     if (!token) throw new UnauthorizedException('Falta X-Session-Token');
 
     const [sesion] = await this.ds.query(
@@ -393,34 +477,6 @@ export class AlertasService {
     if (!coincide) {
       throw new UnauthorizedException('Sesion de seguimiento invalida o expirada');
     }
-
-    const alerta = await this.findOne(id);
-
-    const ubicaciones = await this.ds.query(
-      `SELECT ST_Y(ubicacion::geometry) AS latitud, ST_X(ubicacion::geometry) AS longitud,
-              velocidad_kmh AS "velocidadKmh", registrado_en AS "registradoEn"
-         FROM ubicaciones_ciudadano
-        WHERE alerta_id = $1
-        ORDER BY registrado_en DESC
-        LIMIT 50`,
-      [id],
-    );
-
-    let sereno: any = null;
-    if (alerta.unidadId) {
-      const rows = await this.ds.query(
-        `SELECT id, codigo,
-                ST_Y(ultima_ubicacion::geometry) AS latitud,
-                ST_X(ultima_ubicacion::geometry) AS longitud,
-                ultima_actualizacion AS "ultimaActualizacion"
-           FROM unidades_serenazgo
-          WHERE id = $1 AND eliminado_en IS NULL`,
-        [alerta.unidadId],
-      );
-      sereno = rows[0] ?? null;
-    }
-
-    return { alerta, ciudadano: { ubicaciones }, sereno: sereno ?? null };
   }
 
   /** Crea una sesion anonima nueva para una alerta existente. */
