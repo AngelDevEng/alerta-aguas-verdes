@@ -15,6 +15,8 @@ describe('Sprint 6 estadisticas (e2e)', () => {
   const DIRECTIVO = { dni: '99999993', rol: 'DIRECTIVO', pass: 'e2e-s6-3' };
   const CIUDADANO = { dni: '99999992', rol: 'CIUDADANO', pass: 'e2e-s6-4' };
   const OPERADOR = { dni: '99999991', rol: 'OPERADOR', pass: 'e2e-s6-5' };
+  // Ids de los usuarios que ESTE archivo inserta; el cleanup borra solo esos.
+  const userIds: string[] = [];
 
   async function login(dni: string, pass: string) {
     const res = await request(app.getHttpServer()).post('/api/v1/auth/login').send({ dni, password: pass });
@@ -31,16 +33,22 @@ describe('Sprint 6 estadisticas (e2e)', () => {
     ds = moduleRef.get(DataSource);
     for (const u of [ADMIN, SERENO, DIRECTIVO, CIUDADANO, OPERADOR]) {
       const hash = bcrypt.hashSync(u.pass, 12);
-      await ds.query(
+      const [row] = await ds.query(
         `INSERT INTO usuarios (dni, nombres, apellidos, email, password_hash, rol_id)
-         VALUES ($1, 'E2E6', 'Test', $3, $2, (SELECT id FROM roles WHERE nombre = $4))`,
+         VALUES ($1, 'E2E6', 'Test', $3, $2, (SELECT id FROM roles WHERE nombre = $4))
+         RETURNING id`,
         [u.dni, hash, `${u.dni}@e2e6.local`, u.rol],
       );
+      userIds.push(row.id);
     }
   });
 
   afterAll(async () => {
-    await ds.query(`DELETE FROM usuarios WHERE dni IN ('99999995','99999994','99999993','99999992','99999991')`);
+    // Solo los usuarios que este archivo inserto (por id).
+    if (userIds.length) {
+      await ds.query(`DELETE FROM refresh_tokens WHERE usuario_id = ANY($1::uuid[])`, [userIds]);
+      await ds.query(`DELETE FROM usuarios WHERE id = ANY($1::uuid[])`, [userIds]);
+    }
     await app.close();
   });
 

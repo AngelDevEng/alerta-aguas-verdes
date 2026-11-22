@@ -18,6 +18,8 @@ describe('Alertas SOS (e2e)', () => {
   const ADMIN = { dni: '99999980', rol: 'ADMIN', pass: 'e2e-sos-1' };
   const SERENO = { dni: '99999981', rol: 'SERENO', pass: 'e2e-sos-2' };
   const ids: string[] = [];
+  // Ids de los usuarios que ESTE archivo inserta; el cleanup borra solo esos.
+  const userIds: string[] = [];
 
   async function login(dni: string, pass: string) {
     const res = await request(app.getHttpServer())
@@ -52,20 +54,36 @@ describe('Alertas SOS (e2e)', () => {
 
     for (const u of [ADMIN, SERENO]) {
       const hash = bcrypt.hashSync(u.pass, 12);
-      await ds.query(
+      const [row] = await ds.query(
         `INSERT INTO usuarios (dni, nombres, apellidos, email, password_hash, rol_id)
-         VALUES ($1, 'E2E', 'Sos', $3, $2, (SELECT id FROM roles WHERE nombre = $4))`,
+         VALUES ($1, 'E2E', 'Sos', $3, $2, (SELECT id FROM roles WHERE nombre = $4))
+         RETURNING id`,
         [u.dni, hash, `${u.dni}@e2e-sos.local`, u.rol],
       );
+      userIds.push(row.id);
     }
   });
 
   afterAll(async () => {
     if (ids.length) {
+      // Se recolectan las incidencias antes de borrar las alertas: el FK es
+      // ON DELETE SET NULL, asi que despues del borrado ya no se podria ubicar.
+      const incidencias = await ds.query(
+        `SELECT incidencia_id FROM alertas
+          WHERE id = ANY($1::uuid[]) AND incidencia_id IS NOT NULL`,
+        [ids],
+      );
       await ds.query(`DELETE FROM alertas WHERE id = ANY($1::uuid[])`, [ids]);
+      const incIds = incidencias.map((r: any) => r.incidencia_id).filter(Boolean);
+      if (incIds.length) {
+        await ds.query(`DELETE FROM incidencias WHERE id = ANY($1::uuid[])`, [incIds]);
+      }
     }
-    await ds.query(`DELETE FROM incidencias WHERE referencia = 'Alerta e2e'`);
-    await ds.query(`DELETE FROM usuarios WHERE dni IN ('99999980','99999981')`);
+    // Solo los usuarios que este archivo inserto (por id), nunca por DNI suelto.
+    if (userIds.length) {
+      await ds.query(`DELETE FROM refresh_tokens WHERE usuario_id = ANY($1::uuid[])`, [userIds]);
+      await ds.query(`DELETE FROM usuarios WHERE id = ANY($1::uuid[])`, [userIds]);
+    }
     await app.close();
   });
 
@@ -130,6 +148,110 @@ describe('Alertas SOS (e2e)', () => {
     expect(total).toBe(1);
   });
 
+  it('POST /alertas es idempotente: misma Idempotency-Key devuelve la misma alerta', async () => {
+    const dispositivo = `${DISPOSITIVO}-idem`;
+    const clave = `key-${Date.now()}`;
+
+    const primero = await request(app.getHttpServer())
+      .post('/api/v1/alertas')
+      .set('X-Device-Id', dispositivo)
+      .set('Idempotency-Key', clave)
+      .send({ latitud: -3.4825, longitud: -80.245, telefono: '51900000000', origen: 'APP' });
+    expect(primero.status).toBe(201);
+    ids.push(primero.body.id);
+
+    const segundo = await request(app.getHttpServer())
+      .post('/api/v1/alertas')
+      .set('X-Device-Id', dispositivo)
+      .set('Idempotency-Key', clave)
+      .send({ latitud: -3.4825, longitud: -80.245, telefono: '51900000000', origen: 'APP' });
+
+    expect(segundo.status).toBe(201);
+    expect(segundo.body.id).toBe(primero.body.id);
+    // El reintento devuelve un token nuevo (reemplaza al previo), pero no crea
+    // una segunda alerta.
+    expect(segundo.body.sessionToken).not.toBe(primero.body.sessionToken);
+
+    const [{ total }] = await ds.query(
+      `SELECT count(*)::int AS total FROM alertas WHERE dispositivo_id = $1`,
+      [dispositivo],
+    );
+    expect(total).toBe(1);
+  });
+
+  it('POST /alertas sin ubicacion crea la alerta igual, marcada "Sin ubicación"', async () => {
+    const res = await crearAlerta(`${DISPOSITIVO}-sinubic`, {
+      sinUbicacion: true,
+      precisionM: 8,
+    });
+    expect(res.status).toBe(201);
+    ids.push(res.body.id);
+    expect(res.body.direccion).toBe('Sin ubicación');
+    expect(res.body.sinUbicacion).toBe(true);
+    expect(res.body.precisionM ?? null).toBeNull();
+  });
+
+  it('sin ubicacion: lat/lng son opcionales (no 400) y se persiste sin_ubicacion', async () => {
+    // Sin latitud ni longitud: antes daba 400 por @IsLatitude/@IsLongitude.
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/alertas')
+      .set('X-Device-Id', `${DISPOSITIVO}-sincoords`)
+      .send({ sinUbicacion: true, telefono: '51900000000' });
+    expect(res.status).toBe(201);
+    ids.push(res.body.id);
+    expect(res.body.sinUbicacion).toBe(true);
+
+    const [row] = await ds.query(`SELECT sin_ubicacion FROM alertas WHERE id = $1`, [res.body.id]);
+    expect(row.sin_ubicacion).toBe(true);
+  });
+
+  it('sin ubicacion: la alerta NO aparece en el mapa de calor', async () => {
+    // Una incidencia normal (con ubicacion) si debe aparecer; una de SOS sin
+    // ubicacion no.
+    const normal = await crearAlerta(`${DISPOSITIVO}-heat-ok`);
+    ids.push(normal.body.id);
+    const sinUbic = await crearAlerta(`${DISPOSITIVO}-heat-no`, {
+      sinUbicacion: true,
+      latitud: 0,
+      longitud: 0,
+    });
+    ids.push(sinUbic.body.id);
+
+    const adminToken = await login(ADMIN.dni, ADMIN.pass);
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/incidencias/zonas-calor?desde=2000-01-01T00:00:00Z')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    // El cuerpo es agregado (celdas), no filas; basta con que no explote y
+    // que la consulta no incluya la incidencia sin ubicacion. Verificamos el
+    // conteo total de incidencias en el rango: la sin ubicacion no se cuenta.
+    const [{ total }] = await ds.query(
+      `SELECT count(*)::int AS total FROM incidencias i
+         LEFT JOIN alertas a ON a.incidencia_id = i.id
+        WHERE i.ocurrido_en >= '2000-01-01' AND NOT COALESCE(a.sin_ubicacion, false)`,
+    );
+    const [{ total: totalTodas }] = await ds.query(
+      `SELECT count(*)::int AS total FROM incidencias i
+         LEFT JOIN alertas a ON a.incidencia_id = i.id
+        WHERE i.ocurrido_en >= '2000-01-01'`,
+    );
+    expect(total).toBeLessThan(totalTodas);
+  });
+
+  it('v_alertas_activas expone sinUbicacion y el aviso de llamar', async () => {
+    const res = await crearAlerta(`${DISPOSITIVO}-vista`, {
+      sinUbicacion: true,
+    });
+    ids.push(res.body.id);
+
+    const [row] = await ds.query(
+      `SELECT direccion, "sinUbicacion" FROM v_alertas_activas WHERE id = $1`,
+      [res.body.id],
+    );
+    expect(row.sinUbicacion).toBe(true);
+    expect(row.direccion).toBe('Sin ubicación: llamar al ciudadano');
+  });
+
   it('nueva_alerta_sos llega a central y a serenos', async () => {
     const adminToken = await login(ADMIN.dni, ADMIN.pass);
     const serenoToken = await login(SERENO.dni, SERENO.pass);
@@ -172,16 +294,20 @@ describe('Alertas SOS (e2e)', () => {
     }
   });
 
-  it('rate limit por IP: la sexta peticion recibe 429', async () => {
+  it('rate limit por IP: la 21a peticion recibe 429 (limite 20/10min)', async () => {
     const dispositivo = `${DISPOSITIVO}-rate`;
-    for (let i = 0; i < 5; i++) {
-      const res = await crearAlerta(dispositivo, { latitud: -3.4825 - i * 0.001 });
+    // Dispositivo distinto en cada peticion para aislar el limite de IP; si se
+    // repitiera, el limite por dispositivo (3) saltaria antes.
+    for (let i = 0; i < 20; i++) {
+      const res = await crearAlerta(`${dispositivo}-${i}`, {
+        latitud: -3.4825 - i * 0.0001,
+      });
       expect(res.status).toBe(201);
       ids.push(res.body.id);
     }
 
-    const sexto = await crearAlerta(`${dispositivo}-6`);
-    expect(sexto.status).toBe(429);
-    expect(sexto.headers['retry-after']).toBeTruthy();
+    const vigesimoPrimera = await crearAlerta(`${dispositivo}-21`);
+    expect(vigesimoPrimera.status).toBe(429);
+    expect(vigesimoPrimera.headers['retry-after']).toBeTruthy();
   });
 });

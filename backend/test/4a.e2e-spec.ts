@@ -31,6 +31,9 @@ describe('Backend 4a (e2e)', () => {
   let tokenSereno: string;
   let tokenDirectivo: string;
   const createdIncidentIds: string[] = [];
+  // Ids de las unidades que ESTE archivo crea por HTTP; el cleanup borra solo
+  // esas (no por codigo, que podria coincidir con datos reales).
+  const createdUnitIds: string[] = [];
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -67,8 +70,13 @@ describe('Backend 4a (e2e)', () => {
       await ds.query(`DELETE FROM alertas WHERE incidencia_id = ANY($1::uuid[])`, [createdIncidentIds]);
       await ds.query(`DELETE FROM incidencias WHERE id = ANY($1::uuid[])`, [createdIncidentIds]);
       await ds.query(`DELETE FROM refresh_tokens WHERE usuario_id = ANY($1::uuid[])`, [[adminId, serenoId, directivoId]]);
-      await ds.query(`DELETE FROM unidades_serenazgo WHERE codigo IN ('EGA-999', 'EGA-998')`);
-      await ds.query(`DELETE FROM usuarios WHERE dni = ANY($1::text[])`, [[ADMIN.dni, SERENO.dni, DIRECTIVO.dni]]);
+      // Solo las unidades que este archivo creo (por id), no por codigo.
+      if (createdUnitIds.length) {
+        await ds.query(`DELETE FROM ubicaciones_unidad WHERE unidad_id = ANY($1::uuid[])`, [createdUnitIds]);
+        await ds.query(`DELETE FROM unidades_serenazgo WHERE id = ANY($1::uuid[])`, [createdUnitIds]);
+      }
+      // Solo los usuarios que este archivo inserto (por id).
+      await ds.query(`DELETE FROM usuarios WHERE id = ANY($1::uuid[])`, [[adminId, serenoId, directivoId]]);
     } finally {
       await (app as INestApplication)?.close();
     }
@@ -109,6 +117,7 @@ describe('Backend 4a (e2e)', () => {
         .send({ codigo: 'EGA-999', tipo: 'PATRULLA', placa: 'EGA-999' });
       expect(res.status).toBe(201);
       unidadId = res.body.id;
+      createdUnitIds.push(unidadId);
 
       const list = await request(app.getHttpServer())
         .get('/api/v1/unidades?placa=ega-999') // normaliza a EGA-999
@@ -120,19 +129,19 @@ describe('Backend 4a (e2e)', () => {
       expect(JSON.stringify(list.body)).not.toContain('"dni"');
     });
 
-    it('DIRECTIVO no puede listar unidades', async () => {
+    it('DIRECTIVO puede listar unidades (tiene rol operativo)', async () => {
+      // GET /unidades ahora exige SERENO/OPERADOR/ADMIN/DIRECTIVO; DIRECTIVO
+      // esta en la lista, asi que recibe el listado (200), no 403.
       const res = await request(app.getHttpServer())
         .get('/api/v1/unidades')
         .set('Authorization', `Bearer ${tokenDirectivo}`);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
     });
 
-    it('CIUDADANO no puede listar unidades', async () => {
-      // Un usuario autenticado sin rol operativo recibe 403, no el listado.
-      // (No creamos un CIUDADANO extra; la misma regla la cubre el 403 de arriba.)
-      // Pendiente de sereno: se crea la unidad sin responsable aqui.
+    it('GET /unidades sin token recibe 401', async () => {
       const res = await request(app.getHttpServer()).get('/api/v1/unidades');
-      expect(res.status).toBe(401); // sin token
+      expect(res.status).toBe(401);
     });
 
     it('PATCH /unidades/:id actualiza la placa', async () => {
@@ -185,6 +194,7 @@ describe('Backend 4a (e2e)', () => {
         .set('Authorization', `Bearer ${tokenAdmin}`)
         .send({ codigo: 'EGA-998', tipo: 'PATRULLA', placa: 'EGA-998' });
       unidadLoginId = res.body.id;
+      createdUnitIds.push(unidadLoginId);
       await request(app.getHttpServer())
         .patch(`/api/v1/unidades/${unidadLoginId}/responsable`)
         .set('Authorization', `Bearer ${tokenAdmin}`)
@@ -310,14 +320,31 @@ describe('Backend 4a (e2e)', () => {
   });
 
   describe('GET /unidades/cercanas', () => {
-    it('devuelve unidades DISPONIBLES y ordenadas (Admin)', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/api/v1/unidades/cercanas?lat=-3.4830&lon=-80.2455&radio=2000')
-        .set('Authorization', `Bearer ${tokenAdmin}`);
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      // SER-01 esta sembrada en 03_seed.sql junto a ese punto.
-      expect(res.body.some((u: any) => u.codigo === 'SER-01')).toBe(true);
+    it('devuelve unidades DISPONIBLES creadas por este test', async () => {
+      // Se crea una unidad propia (DISPONIBLE, con ubicacion) en vez de
+      // depender de SER-01 sembrada: la BD real puede tenerla OCUPADA.
+      const s = Date.now().toString().slice(-6);
+      const [unidad] = await ds.query(
+        `INSERT INTO unidades_serenazgo (codigo, tipo, placa, estado)
+         VALUES ($1, 'PIE', $2, 'DISPONIBLE') RETURNING id`,
+        [`test-e2e-$s`, `TST-$s`],
+      );
+      try {
+        await ds.query(
+          `INSERT INTO ubicaciones_unidad (unidad_id, ubicacion)
+           VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography)`,
+          [unidad.id, -80.2455, -3.4830],
+        );
+        const res = await request(app.getHttpServer())
+          .get('/api/v1/unidades/cercanas?lat=-3.4830&lon=-80.2455&radio=2000')
+          .set('Authorization', `Bearer ${tokenAdmin}`);
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body)).toBe(true);
+        expect(res.body.some((u: any) => u.id === unidad.id)).toBe(true);
+      } finally {
+        await ds.query(`DELETE FROM ubicaciones_unidad WHERE unidad_id = $1`, [unidad.id]);
+        await ds.query(`DELETE FROM unidades_serenazgo WHERE id = $1`, [unidad.id]);
+      }
     });
 
     it('exige token (401)', async () => {
