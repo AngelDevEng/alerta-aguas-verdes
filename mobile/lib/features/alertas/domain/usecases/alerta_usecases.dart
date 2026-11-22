@@ -5,8 +5,12 @@ import '../repositories/alerta_repository.dart';
 /// Envia un SOS con la posicion dada (`POST /alertas`).
 ///
 /// Valida las coordenadas antes de gastar la peticion: el backend rechaza
-/// cualquier latitud fuera de rango con un 422, y en una emergidad el usuario
+/// cualquier latitud fuera de rango con un 422, y en una emergencia el usuario
 /// necesita el mensaje local e inmediato, no un round-trip.
+///
+/// Si [sinUbicacion] es true se omite la validacion de rango: se envia igual
+/// (perder el SOS es peor que no tener coordenadas) y el backend marca la
+/// alerta como "Sin ubicacion".
 class EnviarSosUseCase {
   const EnviarSosUseCase(this._repo);
 
@@ -16,13 +20,16 @@ class EnviarSosUseCase {
     required double latitud,
     required double longitud,
     double? precisionM,
+    bool sinUbicacion = false,
+    String? idempotencyKey,
   }) async {
-    if (!latitud.isFinite ||
-        !longitud.isFinite ||
-        latitud < -90 ||
-        latitud > 90 ||
-        longitud < -180 ||
-        longitud > 180) {
+    if (!sinUbicacion &&
+        (!latitud.isFinite ||
+            !longitud.isFinite ||
+            latitud < -90 ||
+            latitud > 90 ||
+            longitud < -180 ||
+            longitud > 180)) {
       return const Err<AlertaSos>(
         ValidationFailure(
           'La ubicacion recibida no es valida. Revisa el GPS e intenta de nuevo.',
@@ -41,6 +48,8 @@ class EnviarSosUseCase {
       latitud: latitud,
       longitud: longitud,
       precisionM: precision,
+      sinUbicacion: sinUbicacion,
+      idempotencyKey: idempotencyKey,
     );
   }
 }

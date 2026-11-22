@@ -143,22 +143,41 @@ class ApiClient {
   }
 
   /// POST tipado.
+  ///
+  /// [timeout] acorta los tres plazos para una llamada puntual (el SOS usa un
+  /// timeout corto para no dejar al usuario esperando y poder reintentar).
   Future<Result<T>> post<T>(
     String path, {
     Object? body,
     bool publico = false,
     Map<String, String>? headers,
+    Duration? timeout,
     required T Function(dynamic data) parse,
   }) async {
     try {
       final res = await dio.post<dynamic>(
         path,
         data: body,
-        options: _opciones(publico, headers),
+        options: _opciones(publico, headers, timeout),
       );
       return Ok<T>(parse(res.data));
     } catch (e) {
       return Err<T>(toFailure(e));
+    }
+  }
+
+  /// Comprueba que la API responde (`GET /health`). Best-effort: devuelve
+  /// `false` ante cualquier error en vez de propagarlo. Se usa para avisar al
+  /// usuario que la central no esta disponible sin bloquear la app.
+  Future<bool> checkHealth() async {
+    try {
+      final res = await dio.get<dynamic>(
+        '/health',
+        options: Options(extra: const {'public': true}),
+      );
+      return esExito(res.statusCode);
+    } catch (_) {
+      return false;
     }
   }
 
@@ -196,10 +215,18 @@ class ApiClient {
   }
 
   /// Marca la peticion como publica para que el `AuthInterceptor` no le anexe
-  /// el token. Los headers extra se usan para `X-Device-Id` del SOS.
-  static Options _opciones(bool publico, [Map<String, String>? headers]) =>
-      Options(
-        extra: publico ? const {'public': true} : null,
-        headers: headers,
-      );
+  /// el token. Los headers extra se usan para `X-Device-Id` e `Idempotency-Key`
+  /// del SOS; [timeout] acorta los plazos de esa llamada concreta.
+  static Options _opciones(bool publico, [Map<String, String>? headers, Duration? timeout]) {
+    final opciones = Options(
+      extra: publico ? const {'public': true} : null,
+      headers: headers,
+    );
+    if (timeout != null) {
+      opciones.connectTimeout = timeout;
+      opciones.sendTimeout = timeout;
+      opciones.receiveTimeout = timeout;
+    }
+    return opciones;
+  }
 }

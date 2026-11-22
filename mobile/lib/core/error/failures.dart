@@ -42,7 +42,7 @@ class NetworkFailure extends Failure {
   bool get reintentable => true;
 }
 
-/// El servidor tardo en responder. Es un subcaso de [NetworkFailure] porque la
+/// El servidor tardo en responder. Es un subcaso de [NetworkFailure] porque la   
 /// UI reacciona igual (reintentar), pero el mensaje es accionable: el operador
 /// sabe que esperar mas, no que esta sin cobertura.
 class TimeoutFailure extends NetworkFailure {

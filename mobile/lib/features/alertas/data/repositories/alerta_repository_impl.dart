@@ -13,11 +13,15 @@ class AlertaRepositoryImpl implements AlertaRepository {
     required double latitud,
     required double longitud,
     double? precisionM,
+    bool sinUbicacion = false,
+    String? idempotencyKey,
   }) =>
       _remote.crearSos(
         latitud: latitud,
         longitud: longitud,
         precisionM: precisionM,
+        sinUbicacion: sinUbicacion,
+        idempotencyKey: idempotencyKey,
       );
 
   @override

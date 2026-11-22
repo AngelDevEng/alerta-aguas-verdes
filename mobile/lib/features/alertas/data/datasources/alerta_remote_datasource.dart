@@ -19,6 +19,8 @@ abstract interface class AlertaRemoteDataSource {
     required double latitud,
     required double longitud,
     double? precisionM,
+    bool sinUbicacion = false,
+    String? idempotencyKey,
   });
 
   Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado);
@@ -35,6 +37,8 @@ class AlertaRemoteDataSourceImpl implements AlertaRemoteDataSource {
     required double latitud,
     required double longitud,
     double? precisionM,
+    bool sinUbicacion = false,
+    String? idempotencyKey,
   }) async {
     // Sin device id el backend no puede deduplicar; si el almacenamiento seguro
     // falla se envia igual, porque perder el SOS es peor que arriesgar una
@@ -46,6 +50,12 @@ class AlertaRemoteDataSourceImpl implements AlertaRemoteDataSource {
       dispositivo = null;
     }
 
+    final headers = <String, String>{
+      if (dispositivo != null) 'X-Device-Id': dispositivo,
+      if (idempotencyKey != null && idempotencyKey.isNotEmpty)
+        'Idempotency-Key': idempotencyKey,
+    };
+
     return _api.post<AlertaSos>(
       '/alertas',
       body: <String, dynamic>{
@@ -53,8 +63,12 @@ class AlertaRemoteDataSourceImpl implements AlertaRemoteDataSource {
         'longitud': longitud,
         'precisionM': ?precisionM,
         'origen': 'APP',
+        if (sinUbicacion) 'sinUbicacion': true,
       },
-      headers: dispositivo == null ? null : {'X-Device-Id': dispositivo},
+      headers: headers.isEmpty ? null : headers,
+      // Timeout corto: ante una red lenta se reintenta con la misma clave en
+      // vez de dejar al usuario esperando.
+      timeout: const Duration(seconds: 8),
       parse: (data) {
         if (data is! Map) {
           throw const NetworkFailure(
@@ -62,18 +76,19 @@ class AlertaRemoteDataSourceImpl implements AlertaRemoteDataSource {
           );
         }
         final id = data['id'];
-        final token = data['sessionToken'];
         if (id is! String || id.isEmpty) {
           throw const NetworkFailure(
             'El servidor no devolvio el id de la alerta.',
           );
         }
-        if (token is! String || token.isEmpty) {
-          throw const NetworkFailure(
-            'El servidor no entrego el token de seguimiento.',
-          );
-        }
-        return AlertaSos(alertaId: id, sessionToken: token);
+        final token = data['sessionToken'];
+        final estado = data['estado'];
+        return AlertaSos(
+          alertaId: id,
+          sessionToken: token is String && token.isNotEmpty ? token : null,
+          estado: estado is String ? estado : null,
+          sinUbicacion: data['sinUbicacion'] == true,
+        );
       },
       publico: true,
     );
