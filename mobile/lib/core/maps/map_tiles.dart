@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:path_provider/path_provider.dart';
@@ -82,11 +83,12 @@ class MapTiles {
   /// cada `build`: crear un `NetworkTileProvider` nuevo en cada rebuild descarta
   /// el cliente HTTP y provoca peticiones de tiles en bucle.
   static TileLayer capaBase({double maxZoom = 19}) {
-    // TEMPORAL: diagnóstico del 403. Imprime la configuración real del build.
-    debugPrint('[MAPA] proveedor: ${usaMapTiler ? 'MapTiler' : 'OSM (fallback desarrollo)'}');
-    debugPrint('[MAPA] urlTemplate: $urlTemplate');
-    debugPrint('[MAPA] MAPTILER_KEY: ${maptilerKey.isEmpty ? '(no inyectada)' : '(inyectada)'}');
-    debugPrint('[MAPA] User-Agent: $userAgent');
+    // TEMPORAL: diagnóstico del 403. Solo en debug y sin la key de MapTiler.
+    if (kDebugMode) {
+      debugPrint('[MAPA] proveedor: ${usaMapTiler ? 'MapTiler' : 'OSM (fallback desarrollo)'}');
+      debugPrint('[MAPA] MAPTILER_KEY: ${maptilerKey.isEmpty ? '(no inyectada)' : '(inyectada)'}');
+      debugPrint('[MAPA] User-Agent: $userAgent');
+    }
 
     return TileLayer(
       urlTemplate: urlTemplate,
