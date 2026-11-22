@@ -124,11 +124,11 @@ class MapTiles {
       );
 
   static void _logErrorTile(TileImage tile, Object error, StackTrace? stackTrace) {
+    if (!kDebugMode) return;
     final c = tile.coordinates;
-    debugPrint('[MAPA] ERROR tile z${c.z}/${c.x}/${c.y}: $error');
-    if (error is NetworkImageLoadException) {
-      debugPrint('[MAPA]   status=${error.statusCode} uri=${error.uri}');
-    }
+    // `mensajeErrorTile` nunca incluye la URL completa: la de MapTiler lleva
+    // `?key=<MAPTILER_KEY>` y no debe aparecer en los logs.
+    debugPrint(mensajeErrorTile(c.z, c.x, c.y, error));
     if (stackTrace != null) {
       debugPrint('[MAPA]   stack=$stackTrace');
     }
@@ -144,5 +144,19 @@ class MapTiles {
       );
 
   static String _claveCache(String url) => BuiltInMapCachingProvider
-      .uuidTileKeyGenerator('$_versionCache|${url.split('?').first}');
+        .uuidTileKeyGenerator('$_versionCache|${url.split('?').first}');
+}
+
+/// Descripcion sanitizada de un tile fallido para los logs.
+///
+/// Solo expone `status` y el `path` del error: nunca la URL completa, porque la
+/// de MapTiler incluye `?key=<MAPTILER_KEY>`. `NetworkImageLoadException`
+/// tampoco se imprime con `$error` (su `toString()` incluye el `uri`).
+@visibleForTesting
+String mensajeErrorTile(int z, int x, int y, Object error) {
+  final base = '[MAPA] ERROR tile z$z/$x/$y';
+  if (error is NetworkImageLoadException) {
+    return '$base: status=${error.statusCode} path=${error.uri.path}';
+  }
+  return '$base: ${error.runtimeType}';
 }
