@@ -116,8 +116,21 @@ export class IncidenciasService {
     return this.findOne(id);
   }
 
+  /**
+   * GeoJSON del mapa. Se excluyen las incidencias abiertas por un SOS sin
+   * ubicacion: sus coordenadas son 0,0 (no fiables) y pintarian un punto falso
+   * en el golfo. El filtro se hace aca porque la vista `v_incidencias_geojson`
+   * no conoce la marca `alertas.sin_ubicacion`.
+   */
   async geojson() {
-    const rows = await this.ds.query(`SELECT feature FROM v_incidencias_geojson ORDER BY ocurrido_en DESC LIMIT 1000`);
+    const rows = await this.ds.query(
+      `SELECT f.feature
+         FROM v_incidencias_geojson f
+         JOIN incidencias i ON i.id = f.id
+         LEFT JOIN alertas a ON a.incidencia_id = i.id
+        WHERE NOT COALESCE(a.sin_ubicacion, false)
+        ORDER BY f.ocurrido_en DESC
+        LIMIT 1000`);
     return { type: 'FeatureCollection', features: rows.map((r: any) => r.feature) };
   }
 
