@@ -65,6 +65,13 @@ describe('Alertas SOS (e2e)', () => {
   });
 
   afterAll(async () => {
+    // Red de seguridad del test de SAVEPOINT: si murio a mitad de camino (p. ej.
+    // el proceso se corto antes del finally), la tabla pudo quedar renombrada.
+    // `IF EXISTS` lo hace inocuo cuando ya se restauro.
+    await ds
+      .query(`ALTER TABLE IF EXISTS alertas_idempotencia_bak RENAME TO alertas_idempotencia`)
+      .catch(() => {});
+
     if (ids.length) {
       // Se recolectan las incidencias antes de borrar las alertas: el FK es
       // ON DELETE SET NULL, asi que despues del borrado ya no se podria ubicar.
