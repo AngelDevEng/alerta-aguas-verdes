@@ -1,14 +1,16 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { UnidadesService } from './unidades.service';
 import { CreateUnidadDto } from './dto/create-unidad.dto';
 import { CercanasQueryDto, EstadoUnidadDto, RastroQueryDto, UbicacionDto } from './dto/ubicacion.dto';
 import { AsignarResponsableDto } from './dto/asignar-responsable.dto';
 import { UpdateUnidadDto } from './dto/update-unidad.dto';
+import { VerificarPlacaQueryDto } from './dto/verificar-placa-query.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsuarioAutenticado } from '../common/types';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
 
 @ApiTags('unidades')
 @ApiBearerAuth()
@@ -25,9 +27,21 @@ export class UnidadesController {
   @Roles('ADMIN')
   @Post() create(@Body() dto: CreateUnidadDto) { return this.svc.create(dto); }
 
-  // El listado operativo solo expone campos minimos, sin DNI (ver service).
-  // DIRECTIVO no los necesita: el seguimiento de flota es operativo.
+  /**
+   * Verificacion publica de placa: el ciudadano que busca una unidad desde el
+   * home no tiene cuenta. Solo devuelve codigo, tipo y placa; nunca estado,
+   * responsable, ubicacion ni ultimaActualizacion (esos datos son operativos y
+   * quedan detras de `GET /unidades`, que exige rol).
+   */
   @Public()
+  @UseGuards(RateLimitGuard)
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'No se usa aqui; el guard lo ignora si no viene.' })
+  @Get('verificar')
+  verificar(@Query() q: VerificarPlacaQueryDto) {
+    return this.svc.verificar(q.placa);
+  }
+
+  @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get() findAll(@Query('placa') placa?: string) { return this.svc.findAll(placa); }
 
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')

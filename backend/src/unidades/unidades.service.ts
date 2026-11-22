@@ -50,6 +50,25 @@ export class UnidadesService {
     return u;
   }
 
+  /**
+   * Verificacion publica de placa. Devuelve solo codigo, tipo y placa: sin
+   * estado, responsable ni ubicacion. Es lo unico que el ciudadano necesita
+   * para confirmar que una placa corresponde a una unidad de serenazgo.
+   *
+   * La comparacion es exacta (normalizada: sin espacios, mayusculas) contra
+   * unidades activas; el `DELETE` logico ya filtra las dadas de baja.
+   */
+  verificar(placa: string) {
+    const normalizada = placa.trim().toUpperCase().replace(/\s+/g, '');
+    return this.ds.query(
+      `SELECT codigo, tipo, placa
+         FROM unidades_serenazgo
+        WHERE eliminado_en IS NULL AND placa = $1
+        ORDER BY codigo`,
+      [normalizada],
+    );
+  }
+
   cercanas(lon: number, lat: number, radio: number) {
     return this.ds.query(
       `SELECT id, codigo, tipo, round(distancia_m::numeric, 1)::float AS "distanciaM"
