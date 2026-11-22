@@ -1,5 +1,6 @@
 import 'package:alerta_aguas_verdes/core/error/result.dart';
 import 'package:alerta_aguas_verdes/core/location/location_service.dart';
+import 'package:alerta_aguas_verdes/core/storage/sos_session_store.dart';
 import 'package:alerta_aguas_verdes/features/alertas/domain/entities/alerta_sos.dart';
 import 'package:alerta_aguas_verdes/features/alertas/domain/repositories/alerta_repository.dart';
 import 'package:alerta_aguas_verdes/features/alertas/domain/usecases/alerta_usecases.dart';
@@ -97,21 +98,65 @@ class _LocationFake implements LocationService {
 class _AlertasFalsa implements AlertaRepository {
   int llamadas = 0;
   double? latitudEnviada;
+  bool? sinUbicacionEnviada;
 
   @override
   Future<Result<AlertaSos>> crearSos({
     required double latitud,
     required double longitud,
     double? precisionM,
+    bool sinUbicacion = false,
+    String? idempotencyKey,
   }) async {
     llamadas++;
     latitudEnviada = latitud;
+    sinUbicacionEnviada = sinUbicacion;
     return const Ok(AlertaSos(alertaId: 'alerta-1', sessionToken: 'token-1'));
   }
 
   @override
   Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado) async =>
       Ok({'id': id, 'estado': estado});
+}
+
+/// Almacen en memoria del SOS (el home no lo usa directo, pero el bloc si).
+class _StoreFalso implements SosStore {
+  PendingSos? pending;
+  String? alertaId;
+  String? token;
+
+  @override
+  Future<String> deviceId() async => 'device-1';
+
+  @override
+  Future<void> save({required String alertaId, required String sessionToken}) async {
+    this.alertaId = alertaId;
+    token = sessionToken;
+  }
+
+  @override
+  Future<({String alertaId, String sessionToken})?> read() async =>
+      (alertaId != null && token != null)
+          ? (alertaId: alertaId!, sessionToken: token!)
+          : null;
+
+  @override
+  Future<void> clear() async {
+    alertaId = null;
+    token = null;
+  }
+
+  @override
+  Future<void> savePending(PendingSos value) async => pending = value;
+
+  @override
+  Future<PendingSos?> readPending() async => pending;
+
+  @override
+  Future<bool> hayPendienteExpirado() async => false;
+
+  @override
+  Future<void> clearPending() async => pending = null;
 }
 
 const _admin = Usuario(
@@ -154,6 +199,7 @@ Future<void> _mostrar(
           ),
         ),
     EnviarSosUseCase(alertas ?? _AlertasFalsa()),
+    _StoreFalso(),
   );
   GetIt.I.registerFactory<SosBloc>(() => sos);
 
@@ -238,7 +284,7 @@ void main() {
     expect(find.text('Auxilio enviado a central'), findsOneWidget);
   });
 
-  testWidgets('si el GPS falla, el SOS avisa y no llega al backend',
+  testWidgets('si el GPS falla, el SOS se envia igual (sin ubicacion)',
       (tester) async {
     final alertas = _AlertasFalsa();
     await _mostrar(
@@ -252,12 +298,11 @@ void main() {
     );
 
     await tester.tap(find.byKey(const Key('menu_sos')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
-    expect(alertas.llamadas, 0, reason: 'sin GPS no se gasta el POST');
-    expect(
-      find.text('El GPS esta apagado. Activalo para ubicar la incidencia.'),
-      findsOneWidget,
-    );
+    expect(alertas.llamadas, 1,
+        reason: 'sin GPS la SOS se envia igual, marcada sin ubicacion');
+    expect(alertas.sinUbicacionEnviada, isTrue);
   });
 }
