@@ -179,6 +179,62 @@ describe('Alertas SOS (e2e)', () => {
     expect(total).toBe(1);
   });
 
+  it('misma Idempotency-Key con otro cuerpo responde 409 (no devuelve otra alerta)', async () => {
+    const dispositivo = `${DISPOSITIVO}-conflicto`;
+    const clave = `conflicto-${Date.now()}`;
+
+    const primero = await request(app.getHttpServer())
+      .post('/api/v1/alertas')
+      .set('X-Device-Id', dispositivo)
+      .set('Idempotency-Key', clave)
+      .send({ latitud: -3.4825, longitud: -80.245, telefono: '51900000000', origen: 'APP' });
+    expect(primero.status).toBe(201);
+    ids.push(primero.body.id);
+
+    const segundo = await request(app.getHttpServer())
+      .post('/api/v1/alertas')
+      .set('X-Device-Id', dispositivo)
+      .set('Idempotency-Key', clave)
+      .send({ latitud: -3.5, longitud: -80.3, telefono: '51900000000', origen: 'APP' });
+
+    expect(segundo.status).toBe(409);
+    expect(segundo.body.id).toBeUndefined();
+
+    const [{ total }] = await ds.query(
+      `SELECT count(*)::int AS total FROM alertas WHERE dispositivo_id = $1`,
+      [dispositivo],
+    );
+    // La clave en conflicto no crea otra alerta.
+    expect(total).toBe(1);
+  });
+
+  it('idempotencia best-effort: si el insert de la clave falla, la alerta se crea igual (SAVEPOINT)', async () => {
+    const dispositivo = `${DISPOSITIVO}-savepoint`;
+    const clave = `savepoint-${Date.now()}`;
+
+    // Simula la tabla ausente (42P01) renombrandola: el insert dentro de la
+    // transaccion falla, pero el SAVEPOINT debe impedir que se aborten la
+    // incidencia y la alerta ya insertadas.
+    await ds.query(`ALTER TABLE alertas_idempotencia RENAME TO alertas_idempotencia_bak`);
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/alertas')
+        .set('X-Device-Id', dispositivo)
+        .set('Idempotency-Key', clave)
+        .send({ latitud: -3.4825, longitud: -80.245, telefono: '51900000000', origen: 'APP' });
+
+      expect(res.status).toBe(201);
+      ids.push(res.body.id);
+      expect(res.body.estado).toBe('ACTIVA');
+
+      const [row] = await ds.query(`SELECT id FROM alertas WHERE id = $1`, [res.body.id]);
+      // La alerta se creo pese al fallo de la clave.
+      expect(row).toBeTruthy();
+    } finally {
+      await ds.query(`ALTER TABLE alertas_idempotencia_bak RENAME TO alertas_idempotencia`);
+    }
+  });
+
   it('POST /alertas sin ubicacion crea la alerta igual, marcada "Sin ubicación"', async () => {
     const res = await crearAlerta(`${DISPOSITIVO}-sinubic`, {
       sinUbicacion: true,
@@ -236,6 +292,23 @@ describe('Alertas SOS (e2e)', () => {
         WHERE i.ocurrido_en >= '2000-01-01'`,
     );
     expect(total).toBeLessThan(totalTodas);
+  });
+
+  it('sin ubicacion: la incidencia SOS no aparece en el geojson del mapa', async () => {
+    const res = await crearAlerta(`${DISPOSITIVO}-geojson`, { sinUbicacion: true });
+    ids.push(res.body.id);
+    const codigo = res.body.incidenciaCodigo as string;
+    expect(codigo).toBeTruthy();
+
+    const adminToken = await login(ADMIN.dni, ADMIN.pass);
+    const r = await request(app.getHttpServer())
+      .get('/api/v1/incidencias/geojson')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(r.status).toBe(200);
+    expect(Array.isArray(r.body.features)).toBe(true);
+    // El SOS sin ubicacion se inserto en 0,0: no debe pintar un punto falso.
+    expect(r.body.features.some((f: any) => f?.properties?.codigo === codigo))
+      .toBe(false);
   });
 
   it('v_alertas_activas expone sinUbicacion y el aviso de llamar', async () => {
