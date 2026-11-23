@@ -247,6 +247,8 @@ class _SeccionSos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authState = GetIt.I.isRegistered<AuthBloc>() ? GetIt.I<AuthBloc>().state : null;
+    final sesionOperativa = authState is AuthAutenticado;
     return Center(
       child: FittedBox(
         fit: BoxFit.contain,
@@ -256,22 +258,27 @@ class _SeccionSos extends StatelessWidget {
           builder: (context, sos) {
             final ocupado = sos is SosEnviando || sos is SosConectandoCentral;
             final activa = sos is SosEnviado;
+            final bloqueado = sesionOperativa;
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Semantics(
                   button: true,
-                  label: activa ? 'Ver mi alerta activa' : 'SOS ubicacion',
+                  label: bloqueado
+                      ? 'SOS disponible solo para ciudadanos sin sesion'
+                      : activa
+                          ? 'Ver mi alerta activa'
+                          : 'SOS ubicacion',
                   child: InkWell(
                     key: const Key('menu_sos'),
                     customBorder: const CircleBorder(),
-                    onTap: ocupado
+                    onTap: ocupado || bloqueado
                         ? null
                         : activa
                             ? () => _abrirRastreoActivo(context, sos)
                             : () => context.read<SosBloc>().add(const SosSolicitado()),
                     child: Opacity(
-                      opacity: activa ? 0.55 : 1,
+                      opacity: (activa || bloqueado) ? 0.55 : 1,
                       child: Image.asset(
                         'assets/images/btnsos.webp',
                         width: 290,
@@ -282,7 +289,16 @@ class _SeccionSos extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (activa)
+                if (bloqueado)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'SOS disponible solo para ciudadanos',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                if (activa && !bloqueado)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: FilledButton.icon(
@@ -747,15 +763,39 @@ void _llamar(BuildContext context, {required bool comisaria}) {
   );
 }
 
-/// Accion del escudo: stand-in de `admin()` del legacy
-/// (`Activity_Panico_Main.java:209-227`), que llevaba a
-/// Dashboard/MainActivity/Login segun rol. Esas pantallas aun no existen
-/// (paridad filas 3 y 9), asi que mientras expone la unica accion de sesion.
+/// Accion del escudo: abre opciones de sesion solo cuando el usuario lo pide.
+/// La sesion no se cierra por navegar o retroceder; solo por cierre explicito
+/// o por la expiracion/invalidacion del token.
 Future<void> _accionesSesion(BuildContext context) async {
-  if (GetIt.I.isRegistered<AuthBloc>()) {
+  if (!GetIt.I.isRegistered<AuthBloc>()) {
+    context.go(Rutas.login);
+    return;
+  }
+  final estado = GetIt.I<AuthBloc>().state;
+  if (estado is! AuthAutenticado) {
+    context.go(Rutas.login);
+    return;
+  }
+  final cerrar = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Sesion'),
+      content: Text(estado.usuario.nombreCompleto),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Cerrar sesion'),
+        ),
+      ],
+    ),
+  );
+  if (cerrar == true && context.mounted) {
     GetIt.I<AuthBloc>().add(const AuthLogoutSolicitado());
   }
-  context.go('/login');
 }
 
 /// Aviso de funcion pendiente (mismo texto del menu anterior).

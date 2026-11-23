@@ -93,6 +93,9 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Usuario?> restoreSession() => _local.cachedUser();
 
   @override
+  Future<String?> refreshToken() => _local.refreshToken();
+
+  @override
   Future<Usuario> me() async {
     final res = await _remote.me();
     return res.valueOrThrow.toEntity();

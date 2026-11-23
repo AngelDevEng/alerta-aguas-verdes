@@ -1,3 +1,4 @@
+import '../../../../core/error/failures.dart';
 import '../../../../core/error/result.dart';
 import '../entities/login_request.dart';
 import '../entities/usuario.dart';
@@ -92,11 +93,15 @@ class RestoreSessionUseCase {
   final AuthRepository _repo;
 
   Future<Usuario?> call() => _repo.restoreSession();
+
+  Future<String?> refreshToken() => _repo.refreshToken();
 }
 
 /// Caso de uso: validar la sesion contra el backend en caliente.
 ///
 /// Un access token puede expirar mientras la app esta en segundo plano.
+/// Devuelve null solo cuando la sesion ya no es valida; si el fallo es de
+/// red/transitorio conserva la sesion cacheada.
 class VerifySessionUseCase {
   const VerifySessionUseCase(this._repo);
 
@@ -105,8 +110,11 @@ class VerifySessionUseCase {
   Future<Usuario?> call() async {
     try {
       return await _repo.me();
-    } on Failure {
+    } on AuthFailure {
+      await _repo.logout(null);
       return null;
+    } on Failure {
+      return await _repo.restoreSession();
     }
   }
 }

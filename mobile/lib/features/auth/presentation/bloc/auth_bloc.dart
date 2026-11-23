@@ -43,7 +43,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     // verificamos en paralelo: si el token ya vencio, cae al login.
     emit(AuthAutenticado(cached));
     final vivo = await _verify();
-    if (vivo == null) emit(const AuthNoAutenticado(mensaje: 'Sesion expirada'));
+    if (vivo == null) {
+      // Si la sesion ya cambio (logout/login) o VerifySession solo no pudo
+      // confirmar por red/transitorio, no forzar cierre.
+      if (state is! AuthAutenticado) return;
+      final refresh = await _restore.refreshToken();
+      if (refresh == null || refresh.isEmpty) {
+        emit(const AuthNoAutenticado(mensaje: 'Sesion expirada'));
+      }
+      return;
+    }
+    if (state is AuthAutenticado) emit(AuthAutenticado(vivo));
   }
 
   Future<void> _onLogin(AuthLoginSolicitado event, Emitter<AuthState> emit) =>

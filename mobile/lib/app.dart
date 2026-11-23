@@ -25,11 +25,15 @@ class App extends StatefulWidget {
 }
 
 class _AppState extends State<App> with WidgetsBindingObserver {
+  late final AuthBloc _authBloc;
+  late final AppRouter _appRouter;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Despues del primer frame, cuando GetIt ya esta configurado.
+    _authBloc = GetIt.I<AuthBloc>()..add(const AuthIniciado());
+    _appRouter = AppRouter(_authBloc);
     WidgetsBinding.instance.addPostFrameCallback((_) => _reanudarSos());
   }
 
@@ -56,7 +60,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final authBloc = GetIt.I<AuthBloc>()..add(const AuthIniciado());
-    return AppRouter(authBloc).build();
+    return _appRouter.build();
   }
 }

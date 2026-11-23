@@ -67,11 +67,10 @@ class MapTiles {
   /// Fija el directorio de caché versionado. Debe llamarse una vez antes de
   /// `runApp` (ver `main.dart`).
   ///
-  /// El cambio de nombre (`map_tiles_v2`) y el prefijo de clave (`v2|`)
-  /// invalidan el caché anterior: OSM devolvía el tile "Access blocked" con
-  /// status 200 y flutter_map lo guardaba como si fuera un tile válido.
+  /// En web no hay caché de disco: `path_provider` no soporta
+  /// `getApplicationCacheDirectory`.
   static Future<void> init() async {
-    if (_cacheDirectory != null) return;
+    if (kIsWeb || _cacheDirectory != null) return;
     final dir = await getApplicationCacheDirectory();
     _cacheDirectory = '${dir.path}/map_tiles_$_versionCache';
     debugPrint('[MAPA] cache dir: $_cacheDirectory');
@@ -113,15 +112,18 @@ class MapTiles {
 
   /// Caché en disco. Solo se escriben respuestas 200 (flutter_map,
   /// `image_provider.dart:256-258`); los 403 nunca se guardan.
-  static MapCachingProvider _cachingProvider() =>
-      BuiltInMapCachingProvider.getOrCreateInstance(
-        cacheDirectory: _cacheDirectory,
-        maxCacheSize: _maxCacheBytes,
-        // La key de MapTiler va en la URL; se quita de la clave de caché para no
-        // guardarla en el nombre de los archivos ni invalidar todo el caché si la
-        // key rota. El prefijo de versión invalida cachés anteriores.
-        tileKeyGenerator: _claveCache,
-      );
+  /// En web se omite: no hay filesystem persistente compatible.
+  static MapCachingProvider? _cachingProvider() {
+    if (kIsWeb) return null;
+    return BuiltInMapCachingProvider.getOrCreateInstance(
+      cacheDirectory: _cacheDirectory,
+      maxCacheSize: _maxCacheBytes,
+      // La key de MapTiler va en la URL; se quita de la clave de caché para no
+      // guardarla en el nombre de los archivos ni invalidar todo el caché si la
+      // key rota. El prefijo de versión invalida cachés anteriores.
+      tileKeyGenerator: _claveCache,
+    );
+  }
 
   static void _logErrorTile(TileImage tile, Object error, StackTrace? stackTrace) {
     if (!kDebugMode) return;

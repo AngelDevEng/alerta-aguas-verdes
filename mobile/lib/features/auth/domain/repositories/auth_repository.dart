@@ -15,6 +15,9 @@ abstract interface class AuthRepository {
   /// Usuario cacheado localmente, o `null` si no hay sesion.
   Future<Usuario?> restoreSession();
 
+  /// Refresh token persistido, o `null` si no hay sesion.
+  Future<String?> refreshToken();
+
   Future<Usuario> me();
 
   /// Revoca el refresh en el servidor y limpia los tokens locales siempre.

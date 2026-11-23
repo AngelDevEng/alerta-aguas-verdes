@@ -161,12 +161,31 @@ class _AlertaActivaCard extends StatelessWidget {
     final direccion = (alerta['direccion'] ?? 'Sin direccion').toString();
     final creada = DateTime.tryParse(alerta['creadaEn']?.toString() ?? '')?.toLocal();
     return Card(
-      child: ListTile(
-        title: Text(direccion),
-        subtitle: Text(creada != null ? 'Recibida: ${_hora(creada)}' : 'Alerta activa'),
-        trailing: FilledButton(
-          onPressed: accionando ? null : onAceptar,
-          child: const Text('Aceptar'),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              direccion,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              creada != null ? 'Recibida: ${_hora(creada)}' : 'Alerta activa',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: accionando ? null : onAceptar,
+                child: const Text('Aceptar'),
+              ),
+            ),
+          ],
         ),
       ),
     );
