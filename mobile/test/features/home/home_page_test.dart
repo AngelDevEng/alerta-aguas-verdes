@@ -12,11 +12,13 @@ import 'package:alerta_aguas_verdes/features/auth/domain/entities/usuario.dart';
 import 'package:alerta_aguas_verdes/features/auth/domain/repositories/auth_repository.dart';
 import 'package:alerta_aguas_verdes/features/auth/domain/usecases/auth_usecases.dart';
 import 'package:alerta_aguas_verdes/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:alerta_aguas_verdes/features/auth/presentation/bloc/auth_event.dart';
 import 'package:alerta_aguas_verdes/features/catalogos/domain/entities/catalogo.dart';
 import 'package:alerta_aguas_verdes/features/catalogos/domain/repositories/catalogo_repository.dart';
 import 'package:alerta_aguas_verdes/features/catalogos/domain/usecases/catalogo_usecases.dart';
 import 'package:alerta_aguas_verdes/features/catalogos/presentation/bloc/catalogos_bloc.dart';
 import 'package:alerta_aguas_verdes/features/home/presentation/pages/home_page.dart';
+import 'package:alerta_aguas_verdes/features/rastreo/presentation/rastreo_ciudadano_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -38,6 +40,9 @@ class _AuthFalso implements AuthRepository {
 
   @override
   Future<Usuario?> restoreSession() async => usuario;
+
+  @override
+  Future<String?> refreshToken() async => 'refresh-token';
 
   @override
   Future<Usuario> me() async => usuario;
@@ -185,7 +190,7 @@ const _admin = Usuario(
   rol: 'ADMIN',
 );
 
-/// Arma la pantalla con la sesion ya activa.
+/// Arma la pantalla con la sesion ya activa por defecto.
 ///
 /// Los doubles del SOS son opcionales: si no se pasan, se usa un GPS y un
 /// backend sanos para que cualquier test que solo verifique el menu no tenga
@@ -194,6 +199,7 @@ Future<void> _mostrar(
   WidgetTester tester, {
   LocationService? location,
   AlertaRepository? alertas,
+  bool autenticado = true,
 }) async {
   final auth = _AuthFalso(_admin);
   GetIt.I.registerLazySingleton<AuthBloc>(
@@ -203,7 +209,7 @@ Future<void> _mostrar(
       RestoreSessionUseCase(auth),
       VerifySessionUseCase(auth),
       LoginPorPlacaUseCase(auth),
-    ),
+    )..add(autenticado ? const AuthIniciado() : const AuthLogoutSolicitado()),
   );
   GetIt.I.registerFactory<CatalogosBloc>(
     () => CatalogosBloc(const ObtenerEmergenciasUseCase(_CatalogoFalso())),
@@ -278,19 +284,21 @@ void main() {
     expect(find.byKey(const Key('menu_rastreo')), findsNothing);
   });
 
-  testWidgets('el escudo lleva al login (stand-in de admin())', (tester) async {
+  testWidgets('el escudo abre opciones de sesion sin cerrar automaticamente', (tester) async {
     await _mostrar(tester);
 
     await tester.tap(find.byKey(const Key('home_escudo')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Login'), findsOneWidget);
+    expect(find.text('Sesion'), findsOneWidget);
+    expect(find.text('Cerrar sesion'), findsOneWidget);
+    expect(find.text('Login'), findsNothing);
   });
 
   testWidgets('tocar SOS envia la alerta y confirma con el texto del legacy',
       (tester) async {
     final alertas = _AlertasFalsa();
-    await _mostrar(tester, alertas: alertas);
+    await _mostrar(tester, alertas: alertas, autenticado: false);
 
     await tester.tap(find.byKey(const Key('menu_sos')));
     // La navegacion a RastreoCiudadanoPage deja un Timer.periodic vivo; no se
@@ -300,6 +308,11 @@ void main() {
 
     expect(alertas.llamadas, 1);
     expect(alertas.latitudEnviada, isNotNull);
+    // El listener navega a rastreo y muestra el snack al volver.
+    expect(find.byType(RastreoCiudadanoPage), findsOneWidget);
+    Navigator.of(tester.element(find.byType(RastreoCiudadanoPage))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     expect(find.text('Auxilio enviado a central'), findsOneWidget);
   });
 
@@ -308,6 +321,7 @@ void main() {
     final alertas = _AlertasFalsa();
     await _mostrar(
       tester,
+      autenticado: false,
       alertas: alertas,
       location: _LocationFake(
         falla: const LocalFailure(
@@ -330,7 +344,7 @@ void main() {
     // Peticion que no responde dentro de la ventana del banner.
     final puerta = Completer<void>();
     final alertas = _AlertasFalsa(puerta: puerta);
-    await _mostrar(tester, alertas: alertas);
+    await _mostrar(tester, alertas: alertas, autenticado: false);
 
     await tester.tap(find.byKey(const Key('menu_sos')));
     await tester.pump();
