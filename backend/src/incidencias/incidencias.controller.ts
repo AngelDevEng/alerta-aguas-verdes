@@ -42,7 +42,7 @@ export class IncidenciasController {
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get(':id') findOne(@Param('id', ParseUUIDPipe) id: string) { return this.svc.findOne(id); }
 
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'OPERADOR')
   @Patch(':id/estado')
   cambiarEstado(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CambiarEstadoDto, @CurrentUser() u: UsuarioAutenticado) {
     return this.svc.cambiarEstado(id, dto.estado, u.id);

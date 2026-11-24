@@ -587,21 +587,14 @@ class _Cuadricula extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: _Tarjeta(
-                    key: const Key('menu_mapa_calor'),
-                    icono: 'assets/images/ic_incidencia.webp',
-                    rotulo: 'MAPA\nDELITOS',
-                    onTap: () => context.go(Rutas.mapaCalor),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _Tarjeta(
                     key: const Key('menu_otras_emergencias'),
                     icono: 'assets/images/ic_otras_emergencias.webp',
                     rotulo: 'EMERGENCIAS\nMÚLTIPLES',
                     onTap: () => context.go(Rutas.emergencias),
                   ),
                 ),
+                const SizedBox(width: 8),
+                const Expanded(child: SizedBox.shrink()),
               ],
             ),
           ),

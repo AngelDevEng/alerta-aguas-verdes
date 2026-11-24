@@ -74,11 +74,11 @@ class AppRouter {
     Rutas.home,
     Rutas.emergencias,
     Rutas.reportar,
-    Rutas.mapaCalor,
   };
 
   static bool _exigePanelOperativo(String ruta) =>
       ruta == Rutas.mapa ||
+      ruta.startsWith('/mapa/') ||
       ruta == Rutas.incidencias ||
       ruta.startsWith('${Rutas.incidencias}/');
 
