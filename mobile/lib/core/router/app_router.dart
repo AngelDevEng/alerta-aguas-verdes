@@ -22,6 +22,7 @@ import '../../features/incidencias/presentation/pages/incidencia_detalle_page.da
 import '../../features/incidencias/presentation/pages/reportar_incidencia_page.dart';
 import '../../features/mapa/presentation/bloc/mapa_bloc.dart';
 import '../../features/mapa/presentation/bloc/mapa_event.dart';
+import '../../features/mapa/presentation/mapa_calor_page.dart';
 import '../../features/mapa/presentation/pages/mapa_page.dart';
 import '../../features/patrullero/presentation/patrullero_dashboard_page.dart';
 import '../di/injector.dart';
@@ -33,6 +34,7 @@ class Rutas {
   static const login = '/login';
   static const home = '/';
   static const mapa = '/mapa';
+  static const mapaCalor = '/mapa/calor';
   static const reportar = '/reportar';
   static const incidencias = '/incidencias';
   static const emergencias = '/emergencias';
@@ -76,6 +78,7 @@ class AppRouter {
 
   static bool _exigePanelOperativo(String ruta) =>
       ruta == Rutas.mapa ||
+      ruta.startsWith('/mapa/') ||
       ruta == Rutas.incidencias ||
       ruta.startsWith('${Rutas.incidencias}/');
 
@@ -98,6 +101,12 @@ class AppRouter {
               create: (_) => sl<MapaBloc>()..add(const CargarMapa()),
               child: const MapaPage(),
             ),
+            routes: [
+              GoRoute(
+                path: 'calor',
+                builder: (_, _) => const MapaCalorPage(),
+              ),
+            ],
           ),
           GoRoute(
             path: 'incidencias',

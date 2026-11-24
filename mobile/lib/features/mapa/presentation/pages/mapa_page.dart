@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/maps/map_tiles.dart';
@@ -64,6 +65,12 @@ class _MapaPageState extends State<MapaPage> {
       appBar: AppBar(
         title: const Text('Mapa operativo'),
         actions: [
+          IconButton(
+            key: const Key('mapa_calor'),
+            icon: const Icon(Icons.local_fire_department_outlined),
+            tooltip: 'Mapa de calor',
+            onPressed: () => context.go('/mapa/calor'),
+          ),
           IconButton(
             key: const Key('mapa_recargar'),
             icon: const Icon(Icons.refresh),
