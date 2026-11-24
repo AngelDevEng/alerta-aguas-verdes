@@ -32,7 +32,8 @@ export class IncidenciasController {
 
   // Datos agregados por celda de ~100 m; nunca incidencias individuales.
   // La ruta va antes de ':id' para que 'zonas-calor' no se enrute por ahi.
-  @Roles('ADMIN', 'OPERADOR', 'DIRECTIVO')
+  // Publico: permite que ciudadanos consulten zonas de riesgo sin cuenta.
+  @Public()
   @Get('zonas-calor') zonasCalor(@Query() q: ZonasCalorQueryDto) { return this.svc.zonasCalor(q); }
 
   @Roles('ADMIN', 'OPERADOR', 'DIRECTIVO')
@@ -41,7 +42,7 @@ export class IncidenciasController {
   @Roles('SERENO', 'OPERADOR', 'ADMIN', 'DIRECTIVO')
   @Get(':id') findOne(@Param('id', ParseUUIDPipe) id: string) { return this.svc.findOne(id); }
 
-  @Roles('SERENO', 'OPERADOR', 'ADMIN')
+  @Roles('ADMIN')
   @Patch(':id/estado')
   cambiarEstado(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CambiarEstadoDto, @CurrentUser() u: UsuarioAutenticado) {
     return this.svc.cambiarEstado(id, dto.estado, u.id);

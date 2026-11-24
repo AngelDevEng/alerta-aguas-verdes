@@ -57,7 +57,10 @@ class _MapaCalorPageState extends State<MapaCalorPage> {
       final r = await _dio.get<dynamic>(
         '/incidencias/zonas-calor',
         queryParameters: params,
-        options: Options(headers: token == null ? null : {'Authorization': 'Bearer $token'}),
+        options: Options(
+          headers: token == null || token.isEmpty ? null : {'Authorization': 'Bearer $token'},
+          extra: const {'public': true},
+        ),
       );
       final data = r.data;
       if (!mounted) return;
@@ -67,10 +70,13 @@ class _MapaCalorPageState extends State<MapaCalorPage> {
             : [];
         _cargando = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final msg = e is DioException
+          ? (e.response?.data is Map ? (e.response?.data['mensaje']?.toString() ?? e.response?.data['message']?.toString()) : null)
+          : null;
       setState(() {
-        _error = 'No se pudo cargar el mapa de calor.';
+        _error = (msg != null && msg.isNotEmpty) ? msg : 'No se pudo cargar el mapa de calor.';
         _cargando = false;
       });
     }
