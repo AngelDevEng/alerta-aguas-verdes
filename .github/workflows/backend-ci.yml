@@ -63,7 +63,7 @@ jobs:
 
       - name: Cargar esquema y seed en PostGIS
         run: |
-          node -e "const fs=require('fs');const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();for(const f of ['01_schema.sql','02_indices_triggers.sql','03_seed.sql','04_auth_alertas.sql','05_catalogos_app.sql','06_baja_logica_unidades.sql']){process.stdout.write('aplicando '+f+'\n');await c.query(fs.readFileSync('../database/'+f,'utf8'));}await c.end();console.log('esquema cargado');})().catch(e=>{console.error(e);process.exit(1);});"
+          node -e "const fs=require('fs');const {Client}=require('pg');(async()=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();for(const f of ['01_schema.sql','02_indices_triggers.sql','03_seed.sql','04_auth_alertas.sql','05_catalogos_app.sql','06_baja_logica_unidades.sql','07_sos_seguimiento.sql','08_cerrar_acceso_publico.sql','09_sos_idempotencia.sql','09b_alertas_sin_ubicacion.sql']){process.stdout.write('aplicando '+f+'\n');await c.query(fs.readFileSync('../database/'+f,'utf8'));}await c.end();console.log('esquema cargado');})().catch(e=>{console.error(e);process.exit(1);});"
 
       - name: Pruebas e2e
         run: npm run test:e2e
