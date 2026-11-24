@@ -12,7 +12,7 @@ class ApiClient {
   ApiClient({required String baseUrl, Dio? dio})
       : dio = dio ?? Dio() {
     this.dio.options = BaseOptions(
-      baseUrl: baseUrl,
+      baseUrl: _normalizeBaseUrl(baseUrl),
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 60),
       sendTimeout: const Duration(seconds: 60),
@@ -28,6 +28,17 @@ class ApiClient {
       //     reventando dentro de `parse` y el TypeError llegaba a pantalla.
       validateStatus: esExito,
     );
+  }
+
+  static String _normalizeBaseUrl(String url) {
+    var v = url.trim();
+    while (v.endsWith('/')) {
+      v = v.substring(0, v.length - 1);
+    }
+    while (v.endsWith('.')) {
+      v = v.substring(0, v.length - 1);
+    }
+    return v;
   }
 
   /// Unico predicado de "esto fue exitoso" del proyecto.
