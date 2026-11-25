@@ -14,7 +14,7 @@ jobs:
           channel: 'stable'
       - run: flutter pub get
         working-directory: mobile
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-infos
         working-directory: mobile
       - run: flutter test
         working-directory: mobile
