@@ -42,7 +42,7 @@ BEGIN
           FROM pg_proc p
           JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public'
-           AND p.proowner = current_user
+           AND p.proowner::regrole = current_user::regrole
            AND NOT EXISTS (
                SELECT 1
                  FROM pg_depend d
@@ -81,4 +81,5 @@ SELECT tablename, tableowner, rowsecurity
   FROM pg_tables
  WHERE schemaname = 'public'
  ORDER BY tablename;
+
 

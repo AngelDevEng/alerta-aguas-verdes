@@ -170,7 +170,7 @@ BEGIN
           FROM pg_proc p
           JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public'
-           AND p.proowner = current_user
+           AND p.proowner::regrole = current_user::regrole
            AND NOT EXISTS (
                SELECT 1
                  FROM pg_depend d
@@ -213,3 +213,4 @@ SELECT grantee, table_name, privilege_type
  WHERE table_schema = 'public'
    AND grantee IN ('anon', 'authenticated')
  ORDER BY grantee, table_name, privilege_type;
+
