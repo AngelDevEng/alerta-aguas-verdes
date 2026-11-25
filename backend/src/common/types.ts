@@ -8,6 +8,7 @@ export interface UsuarioAutenticado {
   email: string;
   rol: RolNombre;
   rolId: number;
+  unidadId?: string | null;
 }
 
 export interface JwtPayload {
@@ -15,6 +16,7 @@ export interface JwtPayload {
   rol: RolNombre;
   email: string;
   dni: string;
+  unidadId?: string | null;
   iat?: number;
   exp?: number;
 }

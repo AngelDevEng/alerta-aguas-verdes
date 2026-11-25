@@ -16,6 +16,7 @@ class Usuario {
     required this.nombreCompleto,
     required this.rol,
     this.email,
+    this.unidadId,
   });
 
   final String id;
@@ -23,6 +24,9 @@ class Usuario {
   final String nombreCompleto;
   final String rol;
   final String? email;
+  /// Unidad operativa asociada al login por placa. Se usa para aceptar SOS
+  /// cuando el sereno tiene varias unidades asignadas.
+  final String? unidadId;
 
   // Roles tal como los define `RolesGuard`. Vive en una sola constante porque
   // cada capacidad de la app los compara y duplicar las listas es como aparecen

@@ -115,5 +115,6 @@ extension UsuarioDtoX on UsuarioDto {
         nombreCompleto: nombreCompleto,
         rol: rol,
         email: email,
+        unidadId: unidadId,
       );
 }

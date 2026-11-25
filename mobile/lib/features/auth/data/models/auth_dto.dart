@@ -53,6 +53,7 @@ class UsuarioDto extends Equatable {
     required this.nombreCompleto,
     required this.rol,
     this.email,
+    this.unidadId,
   });
 
   final String id;
@@ -60,6 +61,7 @@ class UsuarioDto extends Equatable {
   final String nombreCompleto;
   final String rol;
   final String? email;
+  final String? unidadId;
 
   factory UsuarioDto.fromJson(Map<String, dynamic> json) => UsuarioDto(
         id: json['id']?.toString() ?? '',
@@ -67,8 +69,9 @@ class UsuarioDto extends Equatable {
         nombreCompleto: json['nombreCompleto']?.toString() ?? '',
         rol: json['rol']?.toString() ?? 'CIUDADANO',
         email: json['email']?.toString(),
+        unidadId: json['unidadId']?.toString(),
       );
 
   @override
-  List<Object?> get props => [id, dni, nombreCompleto, rol, email];
+  List<Object?> get props => [id, dni, nombreCompleto, rol, email, unidadId];
 }

@@ -15,6 +15,7 @@ import '../../../core/storage/token_store.dart';
 import '../../alertas/domain/usecases/alerta_usecases.dart';
 import '../../auth/presentation/bloc/auth_bloc.dart';
 import '../../auth/presentation/bloc/auth_event.dart';
+import '../../auth/presentation/bloc/auth_state.dart';
 
 class PatrulleroDashboardPage extends StatefulWidget {
   const PatrulleroDashboardPage({super.key});
@@ -80,7 +81,9 @@ class _PatrulleroDashboardPageState extends State<PatrulleroDashboardPage> {
   Future<void> _cambiarEstado(String id, String estado) async {
     setState(() => _accionando = true);
     final caso = sl<CambiarEstadoAlertaUseCase>();
-    final r = await caso(id, estado);
+    final authState = context.read<AuthBloc>().state;
+    final unidadId = estado == 'ACEPTADA' && authState is AuthAutenticado ? authState.usuario.unidadId : null;
+    final r = await caso(id, estado, unidadId: unidadId);
     if (!mounted) return;
     setState(() => _accionando = false);
     if (r case Err(:final failure)) {

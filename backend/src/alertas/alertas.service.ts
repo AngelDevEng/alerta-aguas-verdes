@@ -521,14 +521,16 @@ export class AlertasService {
   }
 
   /** Al cerrar la alerta se cierra tambien la incidencia CRITICA asociada y se libera la unidad. */
-  async cambiarEstado(id: string, estado: string, usuario: { id: string; rol: string }) {
+  async cambiarEstado(id: string, estado: string, usuario: { id: string; rol: string; unidadId?: string | null }, unidadIdSolicitada?: string) {
+    if (usuario.rol !== 'SERENO') {
+      throw new ConflictException('Solo el sereno asignado puede cambiar el estado de la alerta.');
+    }
+
     const usuarioId = usuario.id;
     const alerta = await this.findOne(id);
 
-    // ACEPTADA: el sereno toma la alerta con su propia unidad. El cliente nunca
-    // envia unidadId (objetivo general.md:167): se resuelve por
-    // unidades_serenazgo.responsable_id. La restriccion chk_alerta_aceptada exige
-    // aceptada_por, aceptada_en y unidad_id, asi que los tres se escriben juntos.
+    // ACEPTADA: el sereno toma la alerta con su propia unidad (login por placa).
+    // La restriccion chk_alerta_aceptada exige aceptada_por, aceptada_en y unidad_id.
     let unidadAceptada: string | null = null;
     if (estado === 'ACEPTADA') {
       if (alerta.estado !== 'ACTIVA') {
@@ -544,13 +546,23 @@ export class AlertasService {
       if (unidades.length === 0) {
         throw new BadRequestException('El sereno no tiene una unidad asignada.');
       }
-      if (unidades.length > 1) {
+
+      const unidadPreferida = (unidadIdSolicitada || usuario.unidadId || '').trim() || null;
+      let unidad = unidades.length === 1 ? unidades[0] : null;
+      if (unidadPreferida) {
+        unidad = unidades.find((u: any) => u.id === unidadPreferida) ?? null;
+        if (!unidad) {
+          throw new ConflictException('La unidad seleccionada no esta asignada a este sereno.');
+        }
+      } else if (unidades.length > 1) {
         throw new ConflictException(
-          'El sereno tiene varias unidades asignadas. Pida ayuda al operador.',
+          'El sereno tiene varias unidades asignadas. Inicia sesion por placa para aceptar la alerta con la unidad correcta.',
         );
       }
 
-      const unidad = unidades[0];
+      if (!unidad) {
+        throw new BadRequestException('El sereno no tiene una unidad asignada.');
+      }
       if (unidad.estado !== 'DISPONIBLE') {
         throw new ConflictException('La unidad asignada no esta disponible.');
       }

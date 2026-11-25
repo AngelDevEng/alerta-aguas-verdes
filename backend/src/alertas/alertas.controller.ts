@@ -86,9 +86,9 @@ export class AlertasController {
     );
   }
 
-  @Roles('SERENO', 'OPERADOR', 'ADMIN')
+  @Roles('SERENO')
   @Patch(':id/estado')
   cambiarEstado(@Param('id', ParseUUIDPipe) id: string, @Body() dto: EstadoAlertaDto, @CurrentUser() u: UsuarioAutenticado) {
-    return this.svc.cambiarEstado(id, dto.estado, u);
+    return this.svc.cambiarEstado(id, dto.estado, u, dto.unidadId);
   }
 }

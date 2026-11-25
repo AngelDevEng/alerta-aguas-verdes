@@ -49,7 +49,7 @@ export class AuthService {
       id: u.id, dni: u.dni, nombres: u.nombres, apellidos: u.apellidos,
       email: u.email, rol: u.rol, rolId: u.rol_id,
     };
-    return this.emitirTokens(usuario);
+    return this.emitirTokens(usuario, null);
   }
 
   /**
@@ -80,7 +80,7 @@ export class AuthService {
 
     const [u] = await this.ds.query(
       `SELECT u.id, u.dni, u.nombres, u.apellidos, u.email, u.password_hash, u.activo,
-              r.nombre AS rol, r.id AS rol_id
+              r.nombre AS rol, r.id AS rol_id, s.id AS unidad_id
          FROM unidades_serenazgo s
          JOIN usuarios u ON u.id = s.responsable_id
          JOIN roles r ON r.id = u.rol_id
@@ -105,7 +105,7 @@ export class AuthService {
       id: u.id, dni: u.dni, nombres: u.nombres, apellidos: u.apellidos,
       email: u.email, rol: u.rol, rolId: u.rol_id,
     };
-    return this.emitirTokens(usuario);
+    return this.emitirTokens(usuario, u.unidad_id ?? null);
   }
 
   private readonly intentosIp = new Map<string, number[]>();
@@ -151,10 +151,19 @@ export class AuthService {
 
     await this.revocar(hash); // rotacion: el refresh es de un solo uso
 
+    const payloadPrevio = this.decodificarPayload(refreshToken);
     return this.emitirTokens({
       id: u.id, dni: u.dni, nombres: u.nombres, apellidos: u.apellidos,
       email: u.email, rol: u.rol, rolId: u.rol_id,
-    });
+    }, typeof payloadPrevio?.unidadId === 'string' ? payloadPrevio.unidadId : null);
+  }
+
+  private decodificarPayload(token: string): JwtPayload | null {
+    try {
+      return this.jwt.decode(token) as JwtPayload | null;
+    } catch {
+      return null;
+    }
   }
 
   async cerrarSesion(refreshToken: string) {
@@ -162,9 +171,10 @@ export class AuthService {
     return { ok: true };
   }
 
-  private async emitirTokens(usuario: UsuarioAutenticado) {
+  private async emitirTokens(usuario: UsuarioAutenticado, unidadId: string | null = null) {
     const payload: JwtPayload = {
       sub: usuario.id, rol: usuario.rol, email: usuario.email, dni: usuario.dni,
+      ...(unidadId ? { unidadId } : {}),
     };
     const accessToken = await this.jwt.signAsync(payload);
 
@@ -193,6 +203,7 @@ export class AuthService {
       expiresIn: this.jwtTtlSegundos(),
       dni: usuario.dni,
       nombreCompleto,
+      unidadId,
       // Mismo usuario anidado: es lo que lee el cliente Flutter.
       usuario: {
         id: usuario.id,
@@ -200,6 +211,7 @@ export class AuthService {
         nombreCompleto,
         email: usuario.email ?? null,
         rol: usuario.rol,
+        unidadId,
       },
     };
   }

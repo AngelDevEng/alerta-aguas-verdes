@@ -60,6 +60,6 @@ class CambiarEstadoAlertaUseCase {
 
   final AlertaRepository _repo;
 
-  Future<Result<Map<String, dynamic>>> call(String id, String estado) =>
-      _repo.cambiarEstado(id, estado);
+  Future<Result<Map<String, dynamic>>> call(String id, String estado, {String? unidadId}) =>
+      _repo.cambiarEstado(id, estado, unidadId: unidadId);
 }

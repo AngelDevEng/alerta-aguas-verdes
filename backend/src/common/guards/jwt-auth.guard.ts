@@ -45,6 +45,7 @@ export class JwtAuthGuard implements CanActivate {
     req.user = {
       id: u.id, dni: u.dni, nombres: u.nombres, apellidos: u.apellidos,
       email: u.email, rol: u.rol, rolId: u.rol_id,
+      unidadId: typeof payload.unidadId === 'string' ? payload.unidadId : null,
     } as UsuarioAutenticado;
     return true;
   }

@@ -14,6 +14,9 @@ export const ESTADOS_ALERTA = [
 export class EstadoAlertaDto {
   @ApiProperty({ enum: ESTADOS_ALERTA })
   @IsIn(ESTADOS_ALERTA as unknown as string[]) estado: string;
+
+  @ApiPropertyOptional({ description: 'Unidad con la que el sereno acepta la alerta. Si se omite, se usa la unidad del login por placa.' })
+  @IsOptional() @IsString() unidadId?: string;
 }
 
 export class ListarAlertasQueryDto {

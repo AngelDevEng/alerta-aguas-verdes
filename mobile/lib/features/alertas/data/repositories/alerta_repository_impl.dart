@@ -25,6 +25,6 @@ class AlertaRepositoryImpl implements AlertaRepository {
       );
 
   @override
-  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado) =>
-      _remote.cambiarEstado(id, estado);
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado, {String? unidadId}) =>
+      _remote.cambiarEstado(id, estado, unidadId: unidadId);
 }

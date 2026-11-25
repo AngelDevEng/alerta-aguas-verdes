@@ -22,5 +22,5 @@ abstract interface class AlertaRepository {
     String? idempotencyKey,
   });
 
-  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado);
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado, {String? unidadId});
 }
