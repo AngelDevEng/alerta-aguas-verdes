@@ -114,8 +114,8 @@ class _AlertasFake implements AlertaRepository {
   }
 
   @override
-  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado) async =>
-      Ok({'id': id, 'estado': estado});
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado, {String? unidadId}) async =>
+      Ok({'id': id, 'estado': estado, 'unidadId': unidadId});
 }
 
 const _posicion = PosicionActual(

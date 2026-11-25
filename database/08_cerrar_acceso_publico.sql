@@ -14,14 +14,14 @@
 BEGIN;
 
 -- ---------- Revocar acceso a tablas ----------
-REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
 
 -- ---------- Revocar acceso a secuencias ----------
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
 
 -- ---------- Revocar acceso a vistas ----------
-REVOKE ALL ON v_alertas_activas FROM anon, authenticated;
-REVOKE ALL ON v_incidencias_geojson FROM anon, authenticated;
+REVOKE ALL ON v_alertas_activas FROM PUBLIC;
+REVOKE ALL ON v_incidencias_geojson FROM PUBLIC;
 
 -- ---------- Revocar EXECUTE en funciones propias de public (no extensiones) ----------
 DO $$
@@ -44,7 +44,7 @@ BEGIN
            )
     LOOP
         EXECUTE format(
-            'REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC, anon, authenticated',
+            'REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC',
             r.nspname, r.proname, r.args
         );
         RAISE NOTICE 'REVOKE EXECUTE aplicado en %.%()', r.nspname, r.proname;
@@ -52,9 +52,9 @@ BEGIN
 END $$;
 
 -- ---------- Privilegios por defecto para objetos futuros ----------
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM PUBLIC, anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM PUBLIC;
 
 COMMIT;
 

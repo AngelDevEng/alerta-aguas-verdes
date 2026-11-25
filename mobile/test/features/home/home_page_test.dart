@@ -130,8 +130,8 @@ class _AlertasFalsa implements AlertaRepository {
   }
 
   @override
-  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado) async =>
-      Ok({'id': id, 'estado': estado});
+  Future<Result<Map<String, dynamic>>> cambiarEstado(String id, String estado, {String? unidadId}) async =>
+      Ok({'id': id, 'estado': estado, 'unidadId': unidadId});
 }
 
 /// Almacen en memoria del SOS (el home no lo usa directo, pero el bloc si).

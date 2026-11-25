@@ -125,8 +125,8 @@ BEGIN
 END $$;
 
 -- Revocar acceso directo a tablas y secuencias para los roles publicos de Supabase.
-REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
 
 -- Revocar acceso directo a vistas solo si existen (proteccion contra esquema
 -- incompleto). v_alertas_activas (04_auth_alertas.sql:56) y
@@ -139,7 +139,7 @@ BEGIN
       FROM pg_views
      WHERE schemaname = 'public' AND viewname = 'v_alertas_activas';
     IF v_count > 0 THEN
-        EXECUTE 'REVOKE ALL ON v_alertas_activas FROM anon, authenticated';
+        EXECUTE 'REVOKE ALL ON v_alertas_activas FROM PUBLIC';
         RAISE NOTICE 'REVOKE aplicado en v_alertas_activas';
     ELSE
         RAISE NOTICE 'v_alertas_activas no existe; REVOKE omitido';
@@ -149,7 +149,7 @@ BEGIN
       FROM pg_views
      WHERE schemaname = 'public' AND viewname = 'v_incidencias_geojson';
     IF v_count > 0 THEN
-        EXECUTE 'REVOKE ALL ON v_incidencias_geojson FROM anon, authenticated';
+        EXECUTE 'REVOKE ALL ON v_incidencias_geojson FROM PUBLIC';
         RAISE NOTICE 'REVOKE aplicado en v_incidencias_geojson';
     ELSE
         RAISE NOTICE 'v_incidencias_geojson no existe; REVOKE omitido';
@@ -179,7 +179,7 @@ BEGIN
            )
     LOOP
         EXECUTE format(
-            'REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC, anon, authenticated',
+            'REVOKE EXECUTE ON FUNCTION %I.%I(%s) FROM PUBLIC',
             r.nspname, r.proname, r.args
         );
         RAISE NOTICE 'REVOKE EXECUTE aplicado en %.%()', r.nspname, r.proname;
@@ -187,9 +187,9 @@ BEGIN
 END $$;
 
 -- Privilegios por defecto para objetos futuros creados en el esquema public.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM PUBLIC, anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM PUBLIC;
 
 -- Nota: la seccion RLS y permisos de este archivo se complementa y corrige en
 -- database/08_cerrar_acceso_publico.sql, que revoca acceso a vistas y secuencias

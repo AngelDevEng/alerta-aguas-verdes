@@ -37,7 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_alertas_idempotencia_expira
 -- ignora RLS. Se activa igual para que un rol limitado (anon/authenticated)
 -- no pueda leer ni escribir estas claves por accidente.
 ALTER TABLE alertas_idempotencia ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON alertas_idempotencia FROM anon, authenticated;
+REVOKE ALL ON alertas_idempotencia FROM PUBLIC;
 
 -- Limpieza periodica de claves vencidas. Se invoca desde el servicio al crear
 -- una alerta; devuelve void para poder llamarla sin leer resultado.
@@ -47,7 +47,7 @@ AS $$
   DELETE FROM alertas_idempotencia WHERE expira_en < now();
 $$;
 
-REVOKE EXECUTE ON FUNCTION fn_limpiar_idempotencia() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION fn_limpiar_idempotencia() FROM PUBLIC;
 
 COMMIT;
 
