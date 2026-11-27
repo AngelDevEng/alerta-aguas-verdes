@@ -244,11 +244,18 @@ describe('Backend 4a (e2e)', () => {
   });
 
   describe('GET /incidencias/zonas-calor', () => {
-    it('rechaza a SERENO (403)', async () => {
+    it('permite acceso publico sin autenticacion (200)', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/incidencias/zonas-calor');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('tipo', 'FeatureCollection');
+    });
+
+    it('SERENO autenticado tambien puede consultar (200)', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/incidencias/zonas-calor')
         .set('Authorization', `Bearer ${tokenSereno}`);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('DIRECTIVO puede consultar y recibe datos agregados', async () => {
