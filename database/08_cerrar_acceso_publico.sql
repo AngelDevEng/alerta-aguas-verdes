@@ -20,7 +20,7 @@ REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
 
 -- ---------- Revocar acceso a vistas ----------
-DO $
+DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='v_alertas_activas' AND c.relkind='v') THEN
     EXECUTE 'REVOKE ALL ON v_alertas_activas FROM PUBLIC';
@@ -28,7 +28,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname='v_incidencias_geojson' AND c.relkind='v') THEN
     EXECUTE 'REVOKE ALL ON v_incidencias_geojson FROM PUBLIC';
   END IF;
-END $;
+END $$;
 
 -- ---------- Revocar EXECUTE en funciones propias de public (no extensiones) ----------
 DO $$
@@ -81,5 +81,6 @@ SELECT tablename, tableowner, rowsecurity
   FROM pg_tables
  WHERE schemaname = 'public'
  ORDER BY tablename;
+
 
 
